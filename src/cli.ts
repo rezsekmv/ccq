@@ -123,11 +123,16 @@ async function cmdMv(): Promise<void> {
 async function cmdRm(): Promise<void> {
   const idPrefix = args[0];
   if (!idPrefix) throw new Error("usage: ccq rm <id>");
-  const job = await mutateQueue((q) => {
+  const { job, wasRunning } = await mutateQueue((q) => {
     const j = findJob(q.jobs, idPrefix);
-    j.state = "cancelled"; // daemon honors this even mid-run (finishes current run, then drops)
-    return structuredClone(j);
+    const wasRunning = j.state === "running";
+    j.state = "cancelled";
+    return { job: structuredClone(j), wasRunning };
   });
+  if (wasRunning) {
+    // never kill mid-run: daemon finishes the current run, sees cancelled, and cleans up
+    return console.log(`cancelled ${job.id.slice(0, 8)} — running job finishes first, daemon cleans up after`);
+  }
   if (job.worktree) {
     spawnSync("git", ["-C", job.repo, "worktree", "remove", "--force", job.worktree]);
     spawnSync("git", ["-C", job.repo, "worktree", "prune"]);
@@ -198,7 +203,10 @@ async function cmdJobDone(): Promise<void> {
     const cwd: string = payload.cwd ?? "";
     const q = loadQueue();
     const job = q.jobs.find(
-      (j) => (j.state === "running" || j.state === "needs_user") && j.worktree && cwd.startsWith(j.worktree),
+      (j) =>
+        (j.state === "running" || j.state === "needs_user") &&
+        j.worktree &&
+        (cwd === j.worktree || cwd.startsWith(j.worktree + "/")),
     );
     if (job) {
       ensureDirs();

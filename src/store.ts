@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, type Config, type Queue, type UsageSnapshot, type StopSignal } from "./types.ts";
@@ -65,6 +65,13 @@ async function withLock<T>(fn: () => T): Promise<T> {
       }
     } catch (e: any) {
       if (e.code !== "EEXIST") throw e;
+      // holder crashed mid-write? critical sections are milliseconds — a lock older than 30s is stale
+      try {
+        if (Date.now() - statSync(PATHS.queueLock).mtimeMs > 30_000) {
+          unlinkSync(PATHS.queueLock);
+          continue;
+        }
+      } catch {}
       if (Date.now() > deadline) throw new Error(`queue lock stuck: ${PATHS.queueLock} (remove manually if no ccq is running)`);
       await new Promise((r) => setTimeout(r, 100));
     }

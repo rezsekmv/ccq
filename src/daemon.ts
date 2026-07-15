@@ -1,5 +1,5 @@
 import { isInWindow, nextWindowOpen, nightAnchor, weeklyGuard } from "./guard.ts";
-import { finalize, removeWorktree, runJob } from "./run.ts";
+import { finalize, removeWorktree, runJob, type RunOutcome } from "./run.ts";
 import { acquireDaemonLock, clearSignal, loadConfig, loadUsage, mutateQueue, readSignal, releaseDaemonLock } from "./store.ts";
 import { makeTmux, sessionName } from "./tmux.ts";
 import type { Config, Job } from "./types.ts";
@@ -44,11 +44,12 @@ async function sweepNeedsUser(cfg: Config): Promise<void> {
     await removeWorktree(job);
     job.state = "done";
     job.finishedAt = Date.now();
-    clearSignal(job.id);
     await mutateQueue((q) => {
       const i = q.jobs.findIndex((x) => x.id === job.id);
-      if (i >= 0) q.jobs[i] = job;
+      // rm during finalize marks it cancelled — never overwrite that
+      if (i >= 0 && q.jobs[i]!.state !== "cancelled") q.jobs[i] = job;
     });
+    clearSignal(job.id); // after persist — crash in between must not strand a needs_user job without its signal
   }
 }
 
@@ -87,7 +88,9 @@ async function dispatchOne(cfg: Config): Promise<"ran" | "idle" | { sleepUntil: 
   const { job, resuming } = picked;
   log(`${resuming ? "resuming" : "starting"} job ${job.id.slice(0, 8)}: ${job.prompt.split("\n")[0]!.slice(0, 60)}`);
 
-  const outcome = await runJob(job, cfg); // blocking; may overrun window end by design
+  // blocking; may overrun window end by design. A setup throw (worktree/tmux) must not
+  // strand the job in "running" — fold it into the error outcome path.
+  const outcome = await runJob(job, cfg).catch((e): RunOutcome => ({ kind: "error", errorText: e.message }));
   let sleepUntil: number | null = null;
 
   switch (outcome.kind) {
@@ -134,12 +137,19 @@ async function dispatchOne(cfg: Config): Promise<"ran" | "idle" | { sleepUntil: 
       break;
   }
 
-  await mutateQueue((q) => {
+  const cancelledMidRun = await mutateQueue((q) => {
     const i = q.jobs.findIndex((x) => x.id === job.id);
     // rm-while-running marks the job cancelled — never overwrite that
-    if (i >= 0 && q.jobs[i]!.state !== "cancelled") q.jobs[i] = job;
+    if (i >= 0 && q.jobs[i]!.state === "cancelled") return true;
+    if (i >= 0) q.jobs[i] = job;
     if (outcome.kind === "done") q.meta.jobsThisNight++;
+    return false;
   });
+  if (cancelledMidRun) {
+    log(`job ${job.id.slice(0, 8)} was cancelled mid-run — cleaning up`);
+    await makeTmux(cfg.tmuxBin).killSession(sessionName(job.id));
+    await removeWorktree(job);
+  }
 
   if (sleepUntil) return { sleepUntil };
   return "ran";
@@ -160,7 +170,8 @@ export async function daemon(once: boolean): Promise<void> {
 
   for (;;) {
     const now = Date.now();
-    await sweepNeedsUser(cfg);
+    // one failing job must never kill the daemon — log and keep polling
+    await sweepNeedsUser(cfg).catch((e) => log(`sweepNeedsUser error: ${e.message}`));
 
     if (!isInWindow(now, cfg.window)) {
       if (once) return log("outside window — exiting (--once)");
@@ -170,7 +181,10 @@ export async function daemon(once: boolean): Promise<void> {
       continue;
     }
 
-    const result = await dispatchOne(cfg);
+    const result = await dispatchOne(cfg).catch((e): "idle" => {
+      log(`dispatchOne error: ${e.message}`);
+      return "idle";
+    });
     if (once) return log("--once done");
     if (result === "idle") {
       await sleep(cfg.pollIntervalSec * 1000);

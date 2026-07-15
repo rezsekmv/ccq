@@ -7,14 +7,21 @@ interface LocalTime {
   dow: number; // 0=Sun..6=Sat
 }
 
+const fmtCache = new Map<string, Intl.DateTimeFormat>();
+
 function localTime(now: number, tz: string): LocalTime {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    weekday: "short",
-  }).formatToParts(new Date(now));
+  let fmt = fmtCache.get(tz);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      weekday: "short",
+    });
+    fmtCache.set(tz, fmt); // nextWindowOpen scans ~10k minutes; a fresh formatter per call is seconds of CPU
+  }
+  const parts = fmt.formatToParts(new Date(now));
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   const dows = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   return {
@@ -103,14 +110,19 @@ function toHour24(h: number, ampm: string | undefined): number {
   return h;
 }
 
-/** Next occurrence of local hh:mm strictly after `now` (system tz — limit text is rendered in it). */
+/** Next occurrence of local hh:mm strictly after `now` (system tz — limit text is rendered in it).
+ * Advances by calendar day (setDate) then reasserts hh:mm, so DST transitions can't drift the wall clock. */
 function nextLocal(now: number, hour: number, minute: number, targetDow?: number): number {
   const d = new Date(now);
   d.setHours(hour, minute, 0, 0);
+  const bump = () => {
+    d.setDate(d.getDate() + 1);
+    d.setHours(hour, minute, 0, 0);
+  };
   if (targetDow !== undefined) {
-    while (d.getDay() !== targetDow || d.getTime() <= now) d.setTime(d.getTime() + DAY_MS);
+    while (d.getDay() !== targetDow || d.getTime() <= now) bump();
   } else if (d.getTime() <= now) {
-    d.setTime(d.getTime() + DAY_MS);
+    bump();
   }
   return d.getTime();
 }

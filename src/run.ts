@@ -201,16 +201,20 @@ export async function finalize(job: Job, cfg: Config): Promise<void> {
   }
 
   if (cfg.alwaysPr && !job.noPr) {
-    const proc = Bun.spawn([cfg.ghBin, "pr", "create", "--fill", "--head", job.branch!, "--base", base], {
-      cwd: wt,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const out = (await new Response(proc.stdout).text()) + (await new Response(proc.stderr).text());
-    if ((await proc.exited) === 0) {
-      job.prUrl = out.match(/https:\/\/\S+/)?.[0] ?? null;
-    } else {
-      job.error = `pr create failed (branch pushed): ${out.slice(0, 500)}`;
+    try {
+      const proc = Bun.spawn([cfg.ghBin, "pr", "create", "--fill", "--head", job.branch!, "--base", base], {
+        cwd: wt,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const out = (await new Response(proc.stdout).text()) + (await new Response(proc.stderr).text());
+      if ((await proc.exited) === 0) {
+        job.prUrl = out.match(/https:\/\/\S+/)?.[0] ?? null;
+      } else {
+        job.error = `pr create failed (branch pushed): ${out.slice(0, 500)}`;
+      }
+    } catch (e: any) {
+      job.error = `pr create failed (branch pushed): ${e.message}`; // e.g. gh binary missing
     }
   }
 }
