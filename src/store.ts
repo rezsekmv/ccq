@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DEFAULT_CONFIG, type Config, type Queue, type UsageSnapshot, type StopSignal } from "./types.ts";
 
 export const ROOT = join(homedir(), ".cc-queue");
@@ -138,7 +139,7 @@ export function worktreePath(jobId: string): string {
  */
 export function ensureHookSettings(): string {
   ensureDirs();
-  const cli = new URL("./cli.ts", import.meta.url).pathname;
+  const cli = fileURLToPath(new URL("./cli.ts", import.meta.url)); // pathname keeps %20 etc. — breaks paths with spaces
   const content = {
     hooks: {
       Stop: [{ hooks: [{ type: "command", command: `"${process.execPath}" "${cli}" _job-done` }] }],

@@ -84,10 +84,11 @@ async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: numb
  *  panel and caused false accepts). The glyphs never appear in static UI/changelog text. */
 const ACTIVITY_RE = /esc to interrupt|[✶✻✽·]\s*\w+…|[✶✻✽⣾⣽⣻⢿⡿⣟⣯⣷]/;
 
-/** Context-token counter in the footer ("6% - 49.8k"). Nonzero ⇒ a turn was submitted and ran —
- *  the most reliable "prompt accepted" signal, robust for turns too fast to catch mid-flight. */
+/** Context-token counter in the footer ("… | 6% - 49.8k | …"). Nonzero ⇒ a turn was submitted
+ *  and ran — the most reliable "accepted" signal. Scoped to the "N% - Nk" footer shape so a
+ *  token-like string in the pasted prompt itself can't cause a false accept. */
 function tokensNonzero(pane: string): boolean {
-  const m = pane.match(/(\d+(?:\.\d+)?)k\b/);
+  const m = pane.match(/\d+%\s*-\s*(\d+(?:\.\d+)?)k\b/);
   return !!m && parseFloat(m[1]!) > 0;
 }
 

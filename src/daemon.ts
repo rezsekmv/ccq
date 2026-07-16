@@ -34,8 +34,13 @@ async function reconcile(cfg: Config): Promise<void> {
 /** Terminal failure cleanup: push/PR any commits the run produced (finalize is a no-op if none),
  *  then remove the worktree. Prevents completed-but-unsignaled work from being stranded. */
 async function shipAndDrop(job: Job, cfg: Config): Promise<void> {
-  if (job.worktree) await finalize(job, cfg).catch((e) => log(`ship failed for ${job.id.slice(0, 8)}: ${e.message}`));
-  await removeWorktree(job);
+  if (!job.worktree) return;
+  try {
+    await finalize(job, cfg);
+    await removeWorktree(job); // only drop the worktree once the work is safely pushed/committed
+  } catch (e: any) {
+    log(`ship failed for ${job.id.slice(0, 8)} — keeping worktree for manual recovery: ${e.message}`);
+  }
 }
 
 /** needs_user jobs finish when the user answers the dialog and Claude's Stop hook fires. */
