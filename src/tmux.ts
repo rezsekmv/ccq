@@ -58,7 +58,9 @@ export function makeTmux(bin: string): Tmux {
       if ((await proc.exited) !== 0) throw new Error("tmux load-buffer failed");
       const r = await run(bin, ["paste-buffer", "-p", "-b", "ccq", "-t", name]);
       if (r.code !== 0) throw new Error("tmux paste-buffer failed");
-      await new Promise((r2) => setTimeout(r2, 300)); // let CC's editor ingest the paste
+      // CC must fully exit bracketed-paste mode before Enter registers as submit (not a newline);
+      // 300ms was too short and Enter got absorbed, leaving the prompt unsent. 2s is reliable.
+      await new Promise((r2) => setTimeout(r2, 2000));
       await run(bin, ["send-keys", "-t", name, "Enter"]);
     },
 

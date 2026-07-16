@@ -200,17 +200,14 @@ async function cmdJobDone(): Promise<void> {
   // Stop-hook target. Payload on stdin; match cwd → job worktree; drop signal file. Never fail loudly.
   try {
     const payload = JSON.parse(await new Response(Bun.stdin.stream()).text());
-    const cwd: string = payload.cwd ?? "";
+    const sid: string = payload.session_id ?? "";
     const q = loadQueue();
-    const job = q.jobs.find(
-      (j) =>
-        (j.state === "running" || j.state === "needs_user") &&
-        j.worktree &&
-        (cwd === j.worktree || cwd.startsWith(j.worktree + "/")),
-    );
+    // Correlate by session_id (we assign --session-id ourselves) — robust to cwd symlink
+    // differences (/tmp vs /private/tmp) that a path match would trip on.
+    const job = q.jobs.find((j) => (j.state === "running" || j.state === "needs_user") && j.sessionId && j.sessionId === sid);
     if (job) {
       ensureDirs();
-      atomicWrite(signalPath(job.id), JSON.stringify({ session_id: payload.session_id, transcript_path: payload.transcript_path, cwd }));
+      atomicWrite(signalPath(job.id), JSON.stringify({ session_id: sid, transcript_path: payload.transcript_path, cwd: payload.cwd ?? "" }));
     }
   } catch {}
 }

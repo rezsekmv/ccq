@@ -92,6 +92,18 @@ export async function mutateQueue<T>(fn: (q: Queue) => T): Promise<T> {
   });
 }
 
+/** Persist runtime fields of an in-flight job so the Stop hook (a separate process
+ *  reading queue.json) can correlate the live session back to this job. */
+export async function persistJobFields(
+  jobId: string,
+  fields: Partial<Pick<import("./types.ts").Job, "sessionId" | "worktree" | "branch" | "promptSent">>,
+): Promise<void> {
+  await mutateQueue((q) => {
+    const job = q.jobs.find((j) => j.id === jobId);
+    if (job) Object.assign(job, fields);
+  });
+}
+
 export function signalPath(jobId: string): string {
   return join(PATHS.signals, `${jobId}.json`);
 }
@@ -117,6 +129,28 @@ export function worktreePath(jobId: string): string {
   return join(PATHS.worktrees, jobId);
 }
 
+/**
+ * Settings file passed to the night session via `claude --settings`. MERGES with the user's
+ * real config (keychain auth + plugins intact) — it only ADDS: our completion Stop hook, and
+ * allow-rules so auto mode can push + open the PR unattended. We deliberately do NOT try to
+ * strip the user's own Stop hooks here (can't, via merge) — instead the daemon kills the
+ * session the instant our hook writes the completion signal, cutting off any auto-continue.
+ */
+export function ensureHookSettings(): string {
+  ensureDirs();
+  const cli = new URL("./cli.ts", import.meta.url).pathname;
+  const content = {
+    hooks: {
+      Stop: [{ hooks: [{ type: "command", command: `"${process.execPath}" "${cli}" _job-done` }] }],
+    },
+    permissions: {
+      allow: ["Bash(git push:*)", "Bash(gh pr create:*)"],
+    },
+  };
+  atomicWrite(PATHS.hookSettings, JSON.stringify(content, null, 2));
+  return PATHS.hookSettings;
+}
+
 // Single daemon instance: pid lockfile. Returns false if another live daemon holds it.
 export function acquireDaemonLock(): boolean {
   ensureDirs();
@@ -139,22 +173,3 @@ export function releaseDaemonLock(): void {
   } catch {}
 }
 
-export function hookSettingsContent(): string {
-  // absolute bun + cli.ts paths — hook runs inside CC's sh where mise/local PATH may be absent
-  const self = process.argv[1] ?? "";
-  return JSON.stringify(
-    {
-      hooks: {
-        Stop: [{ hooks: [{ type: "command", command: `"${process.execPath}" "${self}" _job-done` }] }],
-      },
-    },
-    null,
-    2,
-  );
-}
-
-export function ensureHookSettings(): string {
-  ensureDirs();
-  atomicWrite(PATHS.hookSettings, hookSettingsContent()); // idempotent; tracks cli.ts path moves
-  return PATHS.hookSettings;
-}

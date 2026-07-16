@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { looksLikePermissionDialog, looksLikeTrustDialog, parseLimitError, type LimitHit } from "./guard.ts";
-import { appendLog, clearSignal, ensureHookSettings, readSignal, worktreePath } from "./store.ts";
+import { appendLog, clearSignal, ensureHookSettings, persistJobFields, readSignal, worktreePath } from "./store.ts";
 import { makeTmux, sessionName, type Tmux } from "./tmux.ts";
 import type { Config, Job } from "./types.ts";
 
@@ -31,14 +31,23 @@ async function defaultBranch(repo: string): Promise<string> {
 
 export async function ensureWorktree(job: Job, cfg: Config): Promise<void> {
   if (job.worktree && existsSync(job.worktree)) return;
-  const wt = worktreePath(job.id);
-  const base = job.baseBranch ?? (await defaultBranch(job.repo));
-  job.branch = `${cfg.branchPrefix}/${job.id.slice(0, 8)}-${slug(job.prompt)}`;
-  await git(job.repo, ["worktree", "remove", "--force", wt]); // leftover from a crash; ignore failure
+  const wt = worktreePath(job.id); // deterministic: a resume lands the same cwd → session resolves
+  await git(job.repo, ["worktree", "remove", "--force", wt]); // stale leftover from a crash; ignore failure
   await git(job.repo, ["worktree", "prune"]);
-  await git(job.repo, ["branch", "-D", job.branch]); // ignore failure
-  const r = await git(job.repo, ["worktree", "add", "-b", job.branch, wt, base]);
-  if (r.code !== 0) throw new Error(`worktree add failed: ${r.stdout}`);
+
+  // Resume of a job whose branch already carries commits: reattach the worktree to it,
+  // never recreate — that would discard the work (as a timed-out-but-finished job's would).
+  const branchExists = job.branch && (await git(job.repo, ["rev-parse", "--verify", job.branch])).code === 0;
+  if (branchExists) {
+    const r = await git(job.repo, ["worktree", "add", wt, job.branch!]);
+    if (r.code !== 0) throw new Error(`worktree add (resume) failed: ${r.stdout}`);
+  } else {
+    const base = job.baseBranch ?? (await defaultBranch(job.repo));
+    job.branch = `${cfg.branchPrefix}/${job.id.slice(0, 8)}-${slug(job.prompt)}`;
+    await git(job.repo, ["branch", "-D", job.branch]); // ignore failure
+    const r = await git(job.repo, ["worktree", "add", "-b", job.branch, wt, base]);
+    if (r.code !== 0) throw new Error(`worktree add failed: ${r.stdout}`);
+  }
   job.worktree = wt;
 }
 
@@ -56,7 +65,13 @@ async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: numb
       continue;
     }
     // composer rendered AND pane stable across two polls — startup dialogs/notices race the composer
-    if (/[❯>]\s|\? for shortcuts/i.test(pane) && pane === prev) return;
+    if (/[❯>]\s|\? for shortcuts/i.test(pane) && pane === prev) {
+      // A fresh session shows a "What's new" changelog / welcome panel that swallows the first
+      // paste+Enter. Escape dismisses it (harmless if none); then the composer is clear to type.
+      await tmux.sendKeys(name, ["Escape"]);
+      await sleep(800);
+      return;
+    }
     if (await tmux.paneDead(name)) throw new Error(`claude exited during startup:\n${pane.trim().slice(-2000)}`);
     prev = pane;
     await sleep(2000);
@@ -64,17 +79,27 @@ async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: numb
   throw new Error("claude UI not ready within readyTimeoutSec");
 }
 
-/** Claude is visibly working (spinner/interrupt hint) or has consumed the prompt. */
-const ACTIVITY_RE = /esc to interrupt|✻|✽|✶|thinking|tokens/i;
+/** Claude is actively working: the spinner glyphs (✶✻✽) + "esc to interrupt" render only while a
+ *  turn runs. Match the GLYPHS, never a plain word like "thinking" (that appears in the changelog
+ *  panel and caused false accepts). The glyphs never appear in static UI/changelog text. */
+const ACTIVITY_RE = /esc to interrupt|[✶✻✽·]\s*\w+…|[✶✻✽⣾⣽⣻⢿⡿⣟⣯⣷]/;
+
+/** Context-token counter in the footer ("6% - 49.8k"). Nonzero ⇒ a turn was submitted and ran —
+ *  the most reliable "prompt accepted" signal, robust for turns too fast to catch mid-flight. */
+function tokensNonzero(pane: string): boolean {
+  const m = pane.match(/(\d+(?:\.\d+)?)k\b/);
+  return !!m && parseFloat(m[1]!) > 0;
+}
 
 async function submitPrompt(tmux: Tmux, name: string, job: Job, text: string): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     await tmux.paste(name, text);
     await sleep(5000);
     const pane = await tmux.captureVisible(name);
-    // accepted = working, finished already, limit reported, or a dialog popped — main loop handles all of those
-    if (ACTIVITY_RE.test(pane) || readSignal(job.id) || parseLimitError(pane) || looksLikePermissionDialog(pane)) return;
+    // accepted = working / tokens consumed / finished / limit / dialog — main loop handles each
+    if (ACTIVITY_RE.test(pane) || tokensNonzero(pane) || readSignal(job.id) || parseLimitError(pane) || looksLikePermissionDialog(pane)) return;
     appendLog(job.id, `paste attempt ${attempt} not accepted, retrying\n${pane.slice(-1500)}`);
+    await tmux.sendKeys(name, ["Escape"]); // clear any stuck panel/partial input before re-paste
     await sleep(3000);
   }
   throw new Error("prompt was not accepted by claude UI after 3 paste attempts");
@@ -87,12 +112,14 @@ async function submitPrompt(tmux: Tmux, name: string, job: Job, text: string): P
 export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
   const tmux = makeTmux(cfg.tmuxBin);
   const name = sessionName(job.id);
-  const hookSettings = ensureHookSettings();
+  const hookSettings = ensureHookSettings(); // merged into real config: adds our Stop hook + push/PR allows
 
   await ensureWorktree(job, cfg);
   // prompt never landed in the previous attempt → the old session has no context worth resuming
   const resuming = job.promptSent && !!job.sessionId;
   if (!resuming) job.sessionId = crypto.randomUUID();
+  // persist BEFORE the session runs so the Stop hook (separate process) can match session_id → job
+  await persistJobFields(job.id, { sessionId: job.sessionId, worktree: job.worktree, branch: job.branch });
   clearSignal(job.id);
 
   const model = job.model ?? cfg.model;
@@ -109,8 +136,9 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
 
   try {
     await waitForReady(tmux, name, job, cfg.readyTimeoutSec);
-    await submitPrompt(tmux, name, job, resuming ? "continue" : job.prompt);
+    await submitPrompt(tmux, name, job, resuming ? (job.resumeMessage ?? "continue") : job.prompt);
     job.promptSent = true;
+    await persistJobFields(job.id, { promptSent: true });
   } catch (e: any) {
     const pane = await tmux.capturePane(name).catch(() => "");
     appendLog(job.id, pane);

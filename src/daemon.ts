@@ -31,6 +31,13 @@ async function reconcile(cfg: Config): Promise<void> {
   }
 }
 
+/** Terminal failure cleanup: push/PR any commits the run produced (finalize is a no-op if none),
+ *  then remove the worktree. Prevents completed-but-unsignaled work from being stranded. */
+async function shipAndDrop(job: Job, cfg: Config): Promise<void> {
+  if (job.worktree) await finalize(job, cfg).catch((e) => log(`ship failed for ${job.id.slice(0, 8)}: ${e.message}`));
+  await removeWorktree(job);
+}
+
 /** needs_user jobs finish when the user answers the dialog and Claude's Stop hook fires. */
 async function sweepNeedsUser(cfg: Config): Promise<void> {
   const jobs = (await mutateQueue((q) => q.jobs.filter((j) => j.state === "needs_user"))) as Job[];
@@ -124,7 +131,7 @@ async function dispatchOne(cfg: Config): Promise<"ran" | "idle" | { sleepUntil: 
         job.state = "failed";
         job.error = outcome.errorText.slice(0, 2000);
         job.finishedAt = Date.now();
-        await removeWorktree(job);
+        await shipAndDrop(job, cfg); // don't strand commits the run produced before failing
         log(`job ${job.id.slice(0, 8)} failed: ${outcome.errorText.slice(0, 200)}`);
       }
       break;
@@ -132,8 +139,8 @@ async function dispatchOne(cfg: Config): Promise<"ran" | "idle" | { sleepUntil: 
       job.state = "failed";
       job.error = `timeout after ${job.timeoutSec ?? cfg.jobTimeoutSec}s`;
       job.finishedAt = Date.now();
-      await removeWorktree(job);
-      log(`job ${job.id.slice(0, 8)} timed out`);
+      await shipAndDrop(job, cfg); // a job that finished but never signaled still ships its work
+      log(`job ${job.id.slice(0, 8)} timed out${job.prUrl ? ` — work shipped: ${job.prUrl}` : ""}`);
       break;
   }
 

@@ -21,6 +21,7 @@ export interface Job {
   noPr: boolean;
   commitMessage: string | null;
   timeoutSec: number | null;
+  resumeMessage: string | null; // sent on resume instead of the default "continue"
 
   sessionId: string | null;
   promptSent: boolean; // initial prompt confirmed accepted — resume sends "continue", else re-sends prompt
@@ -122,6 +123,7 @@ export function newJob(partial: Pick<Job, "repo" | "prompt"> & Partial<Job>): Jo
     noPr: false,
     commitMessage: null,
     timeoutSec: null,
+    resumeMessage: null,
     sessionId: null,
     promptSent: false,
     worktree: null,
