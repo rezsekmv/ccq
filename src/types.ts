@@ -18,7 +18,8 @@ export interface Job {
   branch: string | null;
   model: string | null;
   permissionMode: string | null;
-  noPr: boolean;
+  push: boolean; // opt-in: push the finished branch to origin. Default false ⇒ commit stays local
+  pr: boolean; // opt-in: open a PR (implies push). Default false
   commitMessage: string | null;
   timeoutSec: number | null;
   resumeMessage: string | null; // sent on resume instead of the default "continue"
@@ -47,7 +48,6 @@ export interface WindowCfg {
 export interface Config {
   window: WindowCfg;
   permissionMode: string;
-  alwaysPr: boolean;
   estWeeklyPctPerJob: number;
   maxJobsPerNight: number;
   maxRetries: number;
@@ -67,7 +67,6 @@ export interface Config {
 export const DEFAULT_CONFIG: Config = {
   window: { start: "23:00", end: "08:00", tz: "Europe/Budapest", days: [0, 1, 2, 3, 4, 5, 6] },
   permissionMode: "auto",
-  alwaysPr: true,
   estWeeklyPctPerJob: 2,
   maxJobsPerNight: 10,
   maxRetries: 1,
@@ -120,7 +119,8 @@ export function newJob(partial: Pick<Job, "repo" | "prompt"> & Partial<Job>): Jo
     branch: null,
     model: null,
     permissionMode: null,
-    noPr: false,
+    push: false,
+    pr: false,
     commitMessage: null,
     timeoutSec: null,
     resumeMessage: null,

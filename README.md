@@ -30,11 +30,11 @@ ccq logs <id> [-f]           # pane snapshots of a job
 ccq daemon                   # foreground; keep it alive: tmux new -s ccq 'ccq daemon'
 ```
 
-Per-job flags for `add`: `--base <branch>` `--model <m>` `--permission-mode <mode>` `--no-pr` `--timeout <sec>` `-m <commit msg>`.
+Per-job flags for `add`: `--base <branch>` `--model <m>` `--permission-mode <mode>` `--push` `--pr` `--timeout <sec>` `-m <commit msg>`.
 
 ## How it dispatches
 
-Every job runs in its own **git worktree** (`~/.cc-queue/worktrees/<id>`, branch `ccq/<id8>-<slug>`) — your checkout is never touched, dirty or not. On success the daemon commits whatever changed, pushes, and opens a PR (`gh pr create --fill`; disable per job with `--no-pr` or globally with `alwaysPr: false`). A job with no changes and no commits is research-only: the transcript path is recorded, no branch is pushed.
+Every job runs in its own **git worktree** (`~/.cc-queue/worktrees/<id>`, branch `ccq/<id8>-<slug>`) — your checkout is never touched, dirty or not. On success the daemon commits whatever changed. Publishing is **opt-in**: by default the commit stays on the local branch; pass `--push` to push the branch to origin, or `--pr` to push **and** open a PR (`gh pr create --fill`). A job with no changes and no commits is research-only: the transcript path is recorded, no branch is created.
 
 **Off-peak window** — jobs start only inside `window` (overnight ranges fine; `days` gates the evening the window opened, so a 02:00 dispatch belongs to the previous day). A running job is never killed at window end.
 
@@ -58,7 +58,6 @@ All keys optional; defaults shown.
 {
   "window": { "start": "23:00", "end": "08:00", "tz": "Europe/Budapest", "days": [0,1,2,3,4,5,6] },
   "permissionMode": "auto",   // per-job --permission-mode overrides; bypassPermissions for trusted repos
-  "alwaysPr": true,
   "estWeeklyPctPerJob": 2,    // % points a typical job is assumed to burn (guard projection)
   "maxJobsPerNight": 10,
   "maxRetries": 1,

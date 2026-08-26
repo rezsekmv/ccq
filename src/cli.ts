@@ -63,7 +63,8 @@ async function cmdAdd(): Promise<void> {
     permissionMode: opt("--permission-mode"),
     commitMessage: opt("-m") ?? opt("--message"),
     timeoutSec: timeout ? parseInt(timeout, 10) : null,
-    noPr: flag("--no-pr"),
+    push: flag("--push"),
+    pr: flag("--pr"), // implies push; handled in finalize
   });
   // prompt source: --file > "-" (stdin) > positional arg
   let prompt: string;
@@ -216,7 +217,8 @@ function help(): void {
   console.log(`ccq — Claude Code off-peak prompt queue
 
   ccq add [prompt|-] [--repo p] [--file f] [--at N] [--base b] [--model m]
-          [--permission-mode m] [--no-pr] [--timeout sec] [-m commitMsg]
+          [--permission-mode m] [--push] [--pr] [--timeout sec] [-m commitMsg]
+          (default: commit only; --push pushes the branch, --pr pushes + opens a PR)
   ccq list | ls
   ccq status
   ccq mv <id> <position>

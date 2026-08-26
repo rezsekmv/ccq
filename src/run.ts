@@ -223,13 +223,15 @@ export async function finalize(job: Job, cfg: Config): Promise<void> {
   const ahead = parseInt((await git(wt, ["rev-list", `${base}..HEAD`, "--count"])).stdout.trim() || "0", 10);
   if (!dirty && ahead === 0) return; // research-only job: transcript is the artifact
 
+  if (!job.push && !job.pr) return; // default: commit stays on the local branch (opt in with --push/--pr)
+
   const push = await git(wt, ["push", "-u", "origin", job.branch!]);
   if (push.code !== 0) {
     job.error = `push failed (commit is on local branch ${job.branch}): ${push.stdout.slice(0, 500)}`;
     return;
   }
 
-  if (cfg.alwaysPr && !job.noPr) {
+  if (job.pr) {
     try {
       const proc = Bun.spawn([cfg.ghBin, "pr", "create", "--fill", "--head", job.branch!, "--base", base], {
         cwd: wt,
