@@ -123,6 +123,20 @@ tmux new -s ccq 'caffeinate -is ccq daemon'
 
 If a night is lost to sleep anyway, `maxTimeoutRequeues` auto-retries the affected jobs, and a slept night is visible in `ccq status` (jobs still queued, night counter at 0).
 
+## Claude Code skill
+
+The repo ships a Claude Code skill at [`.claude/skills/ccq/SKILL.md`](.claude/skills/ccq/SKILL.md) that teaches an agent when and how to queue work with `ccq` — so you (or another agent) can just say *"queue this to run overnight"* and it does the right thing.
+
+Install it globally (available in every project):
+
+```sh
+mkdir -p ~/.claude/skills/ccq
+curl -fsSL https://raw.githubusercontent.com/rezsekmv/ccq/main/.claude/skills/ccq/SKILL.md \
+  -o ~/.claude/skills/ccq/SKILL.md
+```
+
+Or copy it into a single project's `.claude/skills/ccq/SKILL.md`.
+
 ## Job states
 
 `queued → running → done | failed | paused_limit (limit hit, auto-resumes) | needs_user (attach & answer) | cancelled`.
