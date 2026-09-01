@@ -1,14 +1,14 @@
-# cc-queue
+# Claude Code Queue
 
-Off-peak prompt queue for Claude Code. Queue repo-bound prompts during the day; a local daemon runs them overnight (default 23:00–08:00) as **interactive Claude Code sessions inside tmux**, guarded so night batch work never starves your daytime subscription quota.
+Off-peak prompt queue for Claude Code (`ccq`). Queue repo-bound prompts during the day; a local daemon runs them overnight (default 23:00–08:00) as **interactive Claude Code sessions inside tmux**, guarded so night batch work never starves your daytime subscription quota.
 
 ## Why tmux, not `claude -p`?
 
-`claude -p` (headless mode) with OAuth bills as **API usage**, not your Pro/Max subscription ([claude-code#43333](https://github.com/anthropics/claude-code/issues/43333)). Interactive sessions are subscription-covered — so cc-queue drives a real Claude Code TUI in a detached tmux session: paste prompt, wait for the Stop hook, commit the result. Interactive sessions also fire the statusline, which is the only official source of rate-limit data (`rate_limits.five_hour|seven_day` in the statusline stdin payload) — so usage data stays fresh all night while jobs run.
+`claude -p` (headless mode) with OAuth bills as **API usage**, not your Pro/Max subscription ([claude-code#43333](https://github.com/anthropics/claude-code/issues/43333)). Interactive sessions are subscription-covered — so Claude Code Queue drives a real Claude Code TUI in a detached tmux session: paste prompt, wait for the Stop hook, commit the result. Interactive sessions also fire the statusline, which is the only official source of rate-limit data (`rate_limits.five_hour|seven_day` in the statusline stdin payload) — so usage data stays fresh all night while jobs run.
 
 ## Install
 
-Requires **[bun](https://bun.sh)**, **git**, **tmux**, and the **Claude Code** CLI (`claude`); `gh` for PRs. cc-queue runs on the Bun runtime — plain Node won't work.
+Requires **[bun](https://bun.sh)**, **git**, **tmux**, and the **Claude Code** CLI (`claude`); `gh` for PRs. Claude Code Queue runs on the Bun runtime — plain Node won't work.
 
 ```sh
 # from npm (installs the `ccq` command; you still need bun on PATH)
