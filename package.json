@@ -29,13 +29,13 @@
   ],
   "author": "rezsekmv",
   "license": "MIT",
-  "homepage": "https://github.com/rezsekmv/cc-queue#readme",
+  "homepage": "https://github.com/rezsekmv/ccq#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rezsekmv/cc-queue.git"
+    "url": "git+https://github.com/rezsekmv/ccq.git"
   },
   "bugs": {
-    "url": "https://github.com/rezsekmv/cc-queue/issues"
+    "url": "https://github.com/rezsekmv/ccq/issues"
   },
   "publishConfig": {
     "access": "public"

@@ -25,4 +25,4 @@ First public release.
   `--permission-mode`, `--timeout`), `list`, `status`, `mv`, `rm`, `logs`,
   `daemon`, `install-statusline`.
 
-[0.1.0]: https://github.com/rezsekmv/cc-queue/releases/tag/v0.1.0
+[0.1.0]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.0
