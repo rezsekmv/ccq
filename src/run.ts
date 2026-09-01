@@ -29,6 +29,15 @@ async function defaultBranch(repo: string): Promise<string> {
   return (await git(repo, ["rev-parse", "--abbrev-ref", "HEAD"])).stdout.trim();
 }
 
+/** Commits the run has produced on its branch (ahead of base). 0 ⇒ nothing committed —
+ *  used to tell a timed-out-with-progress job from one that never ran (e.g. machine asleep). */
+export async function commitsAhead(job: Job): Promise<number> {
+  if (!job.worktree || !job.branch) return 0;
+  const base = job.baseBranch ?? (await defaultBranch(job.repo));
+  const r = await git(job.worktree, ["rev-list", `${base}..HEAD`, "--count"]);
+  return parseInt(r.stdout.trim() || "0", 10);
+}
+
 export async function ensureWorktree(job: Job, cfg: Config): Promise<void> {
   if (job.worktree && existsSync(job.worktree)) return;
   const wt = worktreePath(job.id); // deterministic: a resume lands the same cwd → session resolves

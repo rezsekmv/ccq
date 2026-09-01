@@ -1,5 +1,5 @@
 import { isInWindow, nextWindowOpen, nightAnchor, weeklyGuard } from "./guard.ts";
-import { finalize, removeWorktree, runJob, type RunOutcome } from "./run.ts";
+import { commitsAhead, finalize, removeWorktree, runJob, type RunOutcome } from "./run.ts";
 import { acquireDaemonLock, clearSignal, loadConfig, loadUsage, mutateQueue, readSignal, releaseDaemonLock } from "./store.ts";
 import { makeTmux, sessionName } from "./tmux.ts";
 import type { Config, Job } from "./types.ts";
@@ -140,13 +140,26 @@ async function dispatchOne(cfg: Config): Promise<"ran" | "idle" | { sleepUntil: 
         log(`job ${job.id.slice(0, 8)} failed: ${outcome.errorText.slice(0, 200)}`);
       }
       break;
-    case "timeout":
-      job.state = "failed";
-      job.error = `timeout after ${job.timeoutSec ?? cfg.jobTimeoutSec}s`;
-      job.finishedAt = Date.now();
-      await shipAndDrop(job, cfg); // a job that finished but never signaled still ships its work
-      log(`job ${job.id.slice(0, 8)} timed out${job.prUrl ? ` — work shipped: ${job.prUrl}` : ""}`);
+    case "timeout": {
+      const ahead = await commitsAhead(job).catch(() => 0);
+      if (ahead === 0 && job.timeoutRequeues < cfg.maxTimeoutRequeues) {
+        // No commits at all ⇒ the session never really ran (typically the machine slept and froze
+        // it). Requeue for a clean retry next dispatch rather than burning the job as failed.
+        job.timeoutRequeues++;
+        job.promptSent = false;
+        job.sessionId = null;
+        await removeWorktree(job); // nothing to lose; recreate clean on retry
+        job.state = "queued";
+        log(`job ${job.id.slice(0, 8)} timed out with no progress (machine asleep?) — requeued ${job.timeoutRequeues}/${cfg.maxTimeoutRequeues}`);
+      } else {
+        job.state = "failed";
+        job.error = `timeout after ${job.timeoutSec ?? cfg.jobTimeoutSec}s${ahead > 0 ? ` (${ahead} commit(s) shipped)` : ""}`;
+        job.finishedAt = Date.now();
+        await shipAndDrop(job, cfg); // a job that made progress but never signaled still ships its work
+        log(`job ${job.id.slice(0, 8)} timed out${job.prUrl ? ` — work shipped: ${job.prUrl}` : ""}`);
+      }
       break;
+    }
   }
 
   const cancelledMidRun = await mutateQueue((q) => {

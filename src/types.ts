@@ -29,6 +29,7 @@ export interface Job {
   worktree: string | null;
   retries: number;
   denials: number;
+  timeoutRequeues: number; // times auto-requeued after a no-progress timeout (machine asleep etc.)
   resumeAt: number | null;
   limitKind: "session" | "weekly" | null;
 
@@ -52,6 +53,7 @@ export interface Config {
   maxJobsPerNight: number;
   maxRetries: number;
   maxDenials: number;
+  maxTimeoutRequeues: number; // auto-requeue a no-progress timeout up to this many times (0 disables)
   model: string | null;
   branchPrefix: string;
   pollIntervalSec: number;
@@ -71,6 +73,7 @@ export const DEFAULT_CONFIG: Config = {
   maxJobsPerNight: 10,
   maxRetries: 1,
   maxDenials: 2,
+  maxTimeoutRequeues: 3,
   model: null,
   branchPrefix: "ccq",
   pollIntervalSec: 60,
@@ -129,6 +132,7 @@ export function newJob(partial: Pick<Job, "repo" | "prompt"> & Partial<Job>): Jo
     worktree: null,
     retries: 0,
     denials: 0,
+    timeoutRequeues: 0,
     resumeAt: null,
     limitKind: null,
     transcriptPath: null,
