@@ -1,11 +1,10 @@
-import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_CONFIG, type Config, type Queue, type UsageSnapshot, type StopSignal } from "./types.ts";
 
 export const ROOT = join(homedir(), ".ccq");
-const LEGACY_ROOT = join(homedir(), ".cc-queue"); // pre-0.1.2 state dir; auto-migrated on first run
 export const PATHS = {
   config: join(ROOT, "config.json"),
   queue: join(ROOT, "queue.json"),
@@ -18,34 +17,7 @@ export const PATHS = {
   daemonLock: join(ROOT, "daemon.pid"),
 };
 
-/** Whether a state dir holds real state ("real"), is just an empty shell ("shell"), or is missing. */
-function stateKind(dir: string): "real" | "shell" | "absent" {
-  if (!existsSync(dir)) return "absent";
-  if (existsSync(join(dir, "config.json"))) return "real";
-  try {
-    const q = JSON.parse(readFileSync(join(dir, "queue.json"), "utf8"));
-    if (Array.isArray(q.jobs) && q.jobs.length > 0) return "real";
-  } catch {}
-  return "shell";
-}
-
-/** Migrate the pre-0.1.2 ~/.cc-queue state dir to ~/.ccq. Robust to a racing old daemon that
- *  recreated an empty ~/.ccq shell: only a real legacy dir migrates, and it replaces an empty
- *  shell but never clobbers a ~/.ccq that already holds real state. */
-function migrateLegacyRoot(): void {
-  try {
-    if (stateKind(LEGACY_ROOT) !== "real") return;
-    const root = stateKind(ROOT);
-    if (root === "absent") renameSync(LEGACY_ROOT, ROOT);
-    else if (root === "shell") {
-      rmSync(ROOT, { recursive: true, force: true });
-      renameSync(LEGACY_ROOT, ROOT);
-    }
-  } catch {}
-}
-
 export function ensureDirs(): void {
-  migrateLegacyRoot();
   for (const dir of [ROOT, PATHS.signals, PATHS.logs, PATHS.worktrees]) {
     mkdirSync(dir, { recursive: true });
   }
