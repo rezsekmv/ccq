@@ -1,8 +1,9 @@
 name: Release
 
 # Cut a release by pushing a tag:  git tag -a v0.1.0 -m v0.1.0 && git push origin v0.1.0
-# The tag must match the version in package.json. Requires repo secret NPM_TOKEN
-# (an npm "Automation" access token).
+# The tag must match the version in package.json. No stored npm token: publishing
+# uses npm OIDC "trusted publishing" (id-token) — configure cc-queue's trusted
+# publisher on npmjs.com to this repo + workflow (same as maestroq).
 
 on:
   push:
@@ -43,13 +44,14 @@ jobs:
       - name: Setup Node for npm publish
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 24
           registry-url: "https://registry.npmjs.org"
 
-      - name: Publish to npm (with provenance)
+      - name: Ensure npm supports OIDC trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Publish to npm (OIDC trusted publishing + provenance)
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub release
         env:
