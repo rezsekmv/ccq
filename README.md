@@ -12,7 +12,7 @@ Requires **[bun](https://bun.sh)**, **git**, **tmux**, and the **Claude Code** C
 
 ```sh
 # from npm (installs the `ccq` command; you still need bun on PATH)
-npm i -g @rezsekmv/cc-queue      # or: bun add -g @rezsekmv/cc-queue
+npm i -g @rezsekmv/ccq      # or: bun add -g @rezsekmv/ccq
 
 # then, once:
 ccq install-statusline   # wraps your statusline to capture official usage data

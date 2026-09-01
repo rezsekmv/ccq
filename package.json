@@ -1,5 +1,5 @@
 {
-  "name": "@rezsekmv/cc-queue",
+  "name": "@rezsekmv/ccq",
   "version": "0.1.0",
   "description": "Off-peak prompt queue for Claude Code — runs repo-bound prompts overnight in tmux, guarded by your subscription usage limits.",
   "type": "module",
