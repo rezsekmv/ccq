@@ -4,6 +4,15 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-09-01
+
+### Added
+- A bundled Claude Code skill (`.claude/skills/ccq/`) so agents know when and how
+  to queue work with `ccq`; README documents installing it.
+
+### Removed
+- The `~/.cc-queue` → `~/.ccq` migration shim (no external users to migrate).
+
 ## [0.1.2] - 2026-09-01
 
 ### Changed
@@ -43,6 +52,7 @@ First public release.
   `--permission-mode`, `--timeout`), `list`, `status`, `mv`, `rm`, `logs`,
   `daemon`, `install-statusline`.
 
+[0.1.3]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.3
 [0.1.2]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.2
 [0.1.1]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.1
 [0.1.0]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.0
