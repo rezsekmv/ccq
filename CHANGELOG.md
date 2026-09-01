@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-09-01
+
+### Changed
+- State directory moved from `~/.cc-queue` to `~/.ccq`. Existing state is
+  migrated automatically on first run (the old directory is renamed).
+
 ## [0.1.1] - 2026-09-01
 
 ### Added
@@ -37,5 +43,6 @@ First public release.
   `--permission-mode`, `--timeout`), `list`, `status`, `mv`, `rm`, `logs`,
   `daemon`, `install-statusline`.
 
+[0.1.2]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.2
 [0.1.1]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.1
 [0.1.0]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.0

@@ -16,7 +16,7 @@ npm i -g @rezsekmv/ccq      # or: bun add -g @rezsekmv/ccq
 
 # then, once:
 ccq install-statusline   # wraps your statusline to capture official usage data
-# open any interactive claude session once so ~/.cc-queue/usage.json exists
+# open any interactive claude session once so ~/.ccq/usage.json exists
 ```
 
 From source:
@@ -70,7 +70,7 @@ ccq add "migrate config to zod" --push -m "chore: zod config"
 
 ## How it dispatches
 
-Every job runs in its own **git worktree** (`~/.cc-queue/worktrees/<id>`, branch `ccq/<id8>-<slug>`) — your checkout is never touched, dirty or not. On success the daemon commits whatever changed. Publishing is **opt-in**: by default the commit stays on the local branch; pass `--push` to push the branch to origin, or `--pr` to push **and** open a PR (`gh pr create --fill`). A job with no changes and no commits is research-only: the transcript path is recorded, no branch is created.
+Every job runs in its own **git worktree** (`~/.ccq/worktrees/<id>`, branch `ccq/<id8>-<slug>`) — your checkout is never touched, dirty or not. On success the daemon commits whatever changed. Publishing is **opt-in**: by default the commit stays on the local branch; pass `--push` to push the branch to origin, or `--pr` to push **and** open a PR (`gh pr create --fill`). A job with no changes and no commits is research-only: the transcript path is recorded, no branch is created.
 
 **Off-peak window** — jobs start only inside `window` (overnight ranges fine; `days` gates the evening the window opened, so a 02:00 dispatch belongs to the previous day). A running job is never killed at window end.
 
@@ -86,7 +86,7 @@ The 5-hour window is deliberately **not** pre-checked at night — when Claude r
 
 **Permission dialogs** at 3am are auto-denied up to `maxDenials` times; if a dialog persists, the job parks as `needs_user` with its tmux session kept alive — attach in the morning (`tmux attach -t ccq-<id8>`), answer, and the daemon finalizes the job automatically once Claude finishes.
 
-## Config (`~/.cc-queue/config.json`)
+## Config (`~/.ccq/config.json`)
 
 All keys optional; defaults shown.
 
