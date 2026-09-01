@@ -105,6 +105,14 @@ export async function persistJobFields(
   });
 }
 
+const TERMINAL_STATES = new Set<import("./types.ts").JobState>(["done", "failed", "cancelled"]);
+
+/** A job `ccq clean` may drop: terminal state, and (if a cutoff is given) finished before it. */
+export function isCleanable(job: import("./types.ts").Job, cutoffMs: number | null): boolean {
+  if (!TERMINAL_STATES.has(job.state)) return false;
+  return cutoffMs === null || (job.finishedAt ?? job.createdAt) < cutoffMs;
+}
+
 export function signalPath(jobId: string): string {
   return join(PATHS.signals, `${jobId}.json`);
 }

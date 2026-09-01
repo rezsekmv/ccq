@@ -4,6 +4,18 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-09-01
+
+### Added
+- `ccq clean [--days N]` — drop finished jobs (done/failed/cancelled) from the
+  queue and sweep any worktrees they left behind.
+
+### Docs
+- Warn that `caffeinate -s` holds only on AC power (not on battery) and that a
+  closed lid sleeps the machine — the main cause of a wasted night.
+- Full `ccq add` flag table; document `maxTimeoutRequeues` and
+  `install-statusline --uninstall`.
+
 ## [0.1.0] - 2026-09-01
 
 First public release.
@@ -25,4 +37,5 @@ First public release.
   `--permission-mode`, `--timeout`), `list`, `status`, `mv`, `rm`, `logs`,
   `daemon`, `install-statusline`.
 
+[0.1.1]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.1
 [0.1.0]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.0

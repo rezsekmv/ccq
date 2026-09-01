@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { daemon } from "./daemon.ts";
 import { isInWindow, nextWindowOpen, weeklyGuard } from "./guard.ts";
-import { PATHS, atomicWrite, ensureDirs, loadConfig, loadQueue, loadUsage, logPath, mutateQueue, saveConfig, signalPath } from "./store.ts";
+import { PATHS, atomicWrite, ensureDirs, isCleanable, loadConfig, loadQueue, loadUsage, logPath, mutateQueue, saveConfig, signalPath } from "./store.ts";
 import { sessionName } from "./tmux.ts";
 import { newJob, type Job } from "./types.ts";
 
@@ -142,6 +142,24 @@ async function cmdRm(): Promise<void> {
   console.log(`cancelled ${job.id.slice(0, 8)}`);
 }
 
+async function cmdClean(): Promise<void> {
+  const daysStr = opt("--days");
+  const cutoff = daysStr ? Date.now() - parseInt(daysStr, 10) * 86_400_000 : null;
+  const removed = await mutateQueue((q) => {
+    const drop = q.jobs.filter((j) => isCleanable(j, cutoff));
+    q.jobs = q.jobs.filter((j) => !drop.includes(j));
+    return drop;
+  });
+  // sweep any worktree a terminal job left behind (defensive; normally already removed)
+  for (const j of removed) {
+    if (j.worktree) {
+      spawnSync("git", ["-C", j.repo, "worktree", "remove", "--force", j.worktree]);
+      spawnSync("git", ["-C", j.repo, "worktree", "prune"]);
+    }
+  }
+  console.log(`cleaned ${removed.length} finished job${removed.length === 1 ? "" : "s"}${cutoff ? ` older than ${daysStr}d` : ""}`);
+}
+
 function cmdLogs(): void {
   const idPrefix = args.filter((a) => a !== "-f")[0];
   if (!idPrefix) throw new Error("usage: ccq logs <id> [-f]");
@@ -223,6 +241,7 @@ function help(): void {
   ccq status
   ccq mv <id> <position>
   ccq rm <id>
+  ccq clean [--days N]        # drop finished jobs (done/failed/cancelled) from the queue
   ccq logs <id> [-f]
   ccq daemon [--once]
   ccq install-statusline [--uninstall]`);
@@ -235,6 +254,7 @@ try {
     case "status": cmdStatus(); break;
     case "mv": await cmdMv(); break;
     case "rm": await cmdRm(); break;
+    case "clean": await cmdClean(); break;
     case "logs": cmdLogs(); break;
     case "daemon": await daemon(flag("--once")); break;
     case "install-statusline": cmdInstallStatusline(); break;
