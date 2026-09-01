@@ -8,7 +8,7 @@ Off-peak prompt queue for Claude Code (`ccq`). Queue repo-bound prompts during t
 
 ## Install
 
-Requires **[bun](https://bun.sh)**, **git**, **tmux**, and the **Claude Code** CLI (`claude`); `gh` for PRs. Claude Code Queue runs on the Bun runtime — plain Node won't work.
+Requires **[bun](https://bun.sh)**, **git**, **tmux**, and the **Claude Code** CLI (`claude`, v2.1.80+ for the statusline `rate_limits` data the guard reads); `gh` for PRs. Claude Code Queue runs on the Bun runtime — plain Node won't work.
 
 ```sh
 # from npm (installs the `ccq` command; you still need bun on PATH)
@@ -40,6 +40,7 @@ ccq mv <id> 2                # reorder
 ccq rm <id>                  # cancel (a running job finishes its current run first)
 ccq logs <id> [-f]           # pane snapshots of a job
 ccq daemon                   # foreground; keep it alive: tmux new -s ccq 'ccq daemon'
+ccq install-statusline       # wrap the statusline for usage data (--uninstall to revert)
 ```
 
 ### `ccq add` flags
@@ -95,8 +96,9 @@ All keys optional; defaults shown.
   "permissionMode": "auto",   // per-job --permission-mode overrides; bypassPermissions for trusted repos
   "estWeeklyPctPerJob": 2,    // % points a typical job is assumed to burn (guard projection)
   "maxJobsPerNight": 10,
-  "maxRetries": 1,
-  "maxDenials": 2,
+  "maxRetries": 1,            // retries after a non-limit error
+  "maxDenials": 2,            // auto-denied permission dialogs before parking as needs_user
+  "maxTimeoutRequeues": 3,    // auto-requeues of a no-progress timeout (machine asleep etc.); 0 disables
   "model": null,              // null = your Claude Code default
   "branchPrefix": "ccq",
   "pollIntervalSec": 60,
@@ -108,14 +110,18 @@ All keys optional; defaults shown.
 
 ## Keep the Mac awake
 
-The daemon does **not** fight system sleep. Keep the machine plugged in with sleep disabled, or run the daemon under caffeinate:
+The daemon does **not** fight system sleep, and this is the #1 cause of a wasted night: a sleeping Mac freezes the running Claude session, which then hits its timeout having committed nothing.
+
+> ⚠️ **`caffeinate -s` only holds on AC power — on battery it does nothing and the Mac still sleeps.** Also, closing the lid sleeps the machine regardless (clamshell), unless an external display is attached.
+
+So for reliable overnight runs: **plug in, lid open**, and start the daemon under caffeinate:
 
 ```sh
 tmux new -s ccq 'caffeinate -is ccq daemon'
-# or globally: sudo pmset -c sleep 0
+# or disable AC sleep globally: sudo pmset -c sleep 0
 ```
 
-A slept night is visible in `ccq status` (jobs still queued, night counter at 0).
+If a night is lost to sleep anyway, `maxTimeoutRequeues` auto-retries the affected jobs, and a slept night is visible in `ccq status` (jobs still queued, night counter at 0).
 
 ## Job states
 
