@@ -42,7 +42,30 @@ ccq logs <id> [-f]           # pane snapshots of a job
 ccq daemon                   # foreground; keep it alive: tmux new -s ccq 'ccq daemon'
 ```
 
-Per-job flags for `add`: `--base <branch>` `--model <m>` `--permission-mode <mode>` `--push` `--pr` `--timeout <sec>` `-m <commit msg>`.
+### `ccq add` flags
+
+Publishing is **opt-in** — by default a finished job only **commits** on its local branch.
+
+| Flag | Effect |
+|------|--------|
+| `--push` | Push the job's branch to `origin` when it finishes (still no PR). |
+| `--pr` | Push **and** open a PR (`gh pr create --fill`). Implies `--push`. |
+| `-m, --message <msg>` | Commit message (default: the prompt's first line). |
+| `--repo <path>` | Target repo (default: current directory). |
+| `--file <path>` | Read the prompt from a file (or pipe it via stdin: `… | ccq add -`). |
+| `--at <n>` | Insert at position `n` in the queue instead of the end. |
+| `--base <branch>` | Branch to fork the worktree from (default: the repo's default branch). |
+| `--model <model>` | Model for this job (default: your Claude Code default). |
+| `--permission-mode <mode>` | Permission mode (default `auto`; e.g. `bypassPermissions` for fully-trusted repos). |
+| `--timeout <sec>` | Max run time before the job is killed (default 4h). A no-progress timeout is auto-requeued. |
+
+Examples:
+
+```sh
+ccq add "fix the flaky test in auth.test.ts"                 # commit only
+ccq add "add rate limiting to the API" --pr                 # commit + push + PR
+ccq add "migrate config to zod" --push -m "chore: zod config"
+```
 
 ## How it dispatches
 
