@@ -51,10 +51,21 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Publish to npm (OIDC trusted publishing + provenance)
-        run: npm publish --access public --provenance
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "cc-queue@$VERSION" version >/dev/null 2>&1; then
+            echo "cc-queue@$VERSION already on npm — skipping publish"
+          else
+            npm publish --access public --provenance
+          fi
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --title "$TAG" --generate-notes
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists — skipping"
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
