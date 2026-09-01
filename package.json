@@ -1,13 +1,44 @@
 {
   "name": "cc-queue",
+  "version": "0.1.0",
+  "description": "Off-peak prompt queue for Claude Code — runs repo-bound prompts overnight in tmux, guarded by your subscription usage limits.",
   "type": "module",
-  "private": true,
   "bin": {
     "ccq": "src/cli.ts"
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "ccq": "bun run src/cli.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "queue",
+    "scheduler",
+    "tmux",
+    "off-peak",
+    "rate-limit",
+    "automation",
+    "cli"
+  ],
+  "author": "rezsekmv",
+  "license": "MIT",
+  "homepage": "https://github.com/rezsekmv/cc-queue#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rezsekmv/cc-queue.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rezsekmv/cc-queue/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@types/bun": "latest"

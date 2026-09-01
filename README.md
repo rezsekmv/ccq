@@ -6,13 +6,25 @@ Off-peak prompt queue for Claude Code. Queue repo-bound prompts during the day; 
 
 `claude -p` (headless mode) with OAuth bills as **API usage**, not your Pro/Max subscription ([claude-code#43333](https://github.com/anthropics/claude-code/issues/43333)). Interactive sessions are subscription-covered — so cc-queue drives a real Claude Code TUI in a detached tmux session: paste prompt, wait for the Stop hook, commit the result. Interactive sessions also fire the statusline, which is the only official source of rate-limit data (`rate_limits.five_hour|seven_day` in the statusline stdin payload) — so usage data stays fresh all night while jobs run.
 
-## Setup
+## Install
+
+Requires **[bun](https://bun.sh)**, **git**, **tmux**, and the **Claude Code** CLI (`claude`); `gh` for PRs. cc-queue runs on the Bun runtime — plain Node won't work.
+
+```sh
+# from npm (installs the `ccq` command; you still need bun on PATH)
+npm i -g cc-queue        # or: bun add -g cc-queue
+
+# then, once:
+ccq install-statusline   # wraps your statusline to capture official usage data
+# open any interactive claude session once so ~/.cc-queue/usage.json exists
+```
+
+From source:
 
 ```sh
 bun install
 bun link                 # exposes `ccq`
-ccq install-statusline   # wraps your statusline to capture official usage data
-# open any interactive claude session once so ~/.cc-queue/usage.json exists
+ccq install-statusline
 ```
 
 ## Usage
