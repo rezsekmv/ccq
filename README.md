@@ -40,6 +40,7 @@ ccq mv <id> 2                # reorder
 ccq rm <id>                  # cancel (a running job finishes its current run first)
 ccq logs <id> [-f]           # pane snapshots of a job
 ccq start                    # start the daemon (backgrounded in tmux, under caffeinate)
+ccq now                      # done for the day? run the queue immediately until morning
 ccq stop | restart           # stop / restart the daemon
 ccq install-statusline       # wrap the statusline for usage data (--uninstall to revert)
 ```
@@ -123,6 +124,8 @@ ccq start   # backgrounds the daemon in a tmux session, wrapped in `caffeinate -
 ```
 
 `ccq start` handles the tmux + caffeinate wiring for you (`ccq stop` / `ccq restart` to manage it). To watch it live: `tmux attach -t ccq`.
+
+**Done for the day early?** `ccq now` starts the daemon and runs the queue **immediately**, ignoring the off-peak window until the next morning — handy when you know you won't touch the machine again today. The weekly guard still applies, so it can't blow next week's budget; after morning it reverts to normal window behavior.
 
 If a night is lost to sleep anyway, `maxTimeoutRequeues` auto-retries the affected jobs, and a slept night is visible in `ccq status` (jobs still queued, night counter at 0).
 

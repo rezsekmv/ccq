@@ -166,15 +166,22 @@ function daemonSessionAlive(tmuxBin: string): boolean {
   return spawnSync(tmuxBin, ["has-session", "-t", DAEMON_SESSION]).status === 0;
 }
 
-function cmdStart(): void {
+function cmdStart(now = false): void {
   const cfg = loadConfig();
-  if (daemonSessionAlive(cfg.tmuxBin)) return console.log(`daemon already running (tmux session '${DAEMON_SESSION}')`);
+  if (daemonSessionAlive(cfg.tmuxBin)) {
+    if (!now) return console.log(`daemon already running (tmux session '${DAEMON_SESSION}')`);
+    spawnSync(cfg.tmuxBin, ["kill-session", "-t", DAEMON_SESSION]); // `ccq now` restarts into run-now mode
+  }
   // absolute bun + this cli, so it runs regardless of the tmux shell's PATH
-  const self = `"${process.execPath}" "${process.argv[1]}" daemon`;
+  const self = `"${process.execPath}" "${process.argv[1]}" daemon${now ? " --now" : ""}`;
   const inner = process.platform === "darwin" ? `caffeinate -is ${self}` : self; // keep the Mac awake while running
   const r = spawnSync(cfg.tmuxBin, ["new-session", "-d", "-s", DAEMON_SESSION, inner]);
   if (r.status !== 0) throw new Error(`failed to start tmux session (is tmux installed?): ${r.stderr?.toString() ?? ""}`);
-  console.log(`daemon started in tmux session '${DAEMON_SESSION}'. Watch: ccq status  |  attach: tmux attach -t ${DAEMON_SESSION}  |  stop: ccq stop`);
+  if (now) {
+    console.log(`daemon started in RUN-NOW mode — dispatching immediately, ignoring the off-peak window until morning (weekly guard still applies). Stop: ccq stop`);
+  } else {
+    console.log(`daemon started in tmux session '${DAEMON_SESSION}'. Watch: ccq status  |  attach: tmux attach -t ${DAEMON_SESSION}  |  stop: ccq stop`);
+  }
 }
 
 function cmdStop(): void {
@@ -268,8 +275,9 @@ function help(): void {
   ccq clean [--days N]        # drop finished jobs (done/failed/cancelled) from the queue
   ccq logs <id> [-f]
   ccq start                   # start the daemon (tmux + caffeinate, backgrounded)
+  ccq now                     # start & run immediately, ignoring the off-peak window until morning
   ccq stop | restart
-  ccq daemon [--once]         # run the daemon in the foreground (start uses this)
+  ccq daemon [--once] [--now] # run the daemon in the foreground (start/now use this)
   ccq install-statusline [--uninstall]`);
 }
 
@@ -283,9 +291,10 @@ try {
     case "clean": await cmdClean(); break;
     case "logs": cmdLogs(); break;
     case "start": cmdStart(); break;
+    case "now": cmdStart(true); break;
     case "stop": cmdStop(); break;
     case "restart": cmdStop(); cmdStart(); break;
-    case "daemon": await daemon(flag("--once")); break;
+    case "daemon": await daemon(flag("--once"), flag("--now")); break;
     case "install-statusline": cmdInstallStatusline(); break;
     case "statusline-tee": await cmdStatuslineTee(); break;
     case "_job-done": await cmdJobDone(); break;

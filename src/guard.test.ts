@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isInWindow, nextWindowOpen, nightAnchor, parseLimitError, weeklyGuard } from "./guard.ts";
+import { isInWindow, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, weeklyGuard } from "./guard.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 import type { UsageSnapshot, WindowCfg } from "./types.ts";
 
@@ -33,6 +33,18 @@ describe("nextWindowOpen / nightAnchor", () => {
   });
   test("anchor of 02:00 is prior evening 23:00", () => {
     expect(nightAnchor(bud(2026, 7, 16, 2, 0), W)).toBe(bud(2026, 7, 15, 23, 0));
+  });
+});
+
+describe("nextWindowEnd (ccq now → run until morning)", () => {
+  test("midday → next 08:00 is tomorrow", () => {
+    expect(nextWindowEnd(bud(2026, 7, 15, 12, 0), W)).toBe(bud(2026, 7, 16, 8, 0));
+  });
+  test("02:00 inside window → 08:00 same morning", () => {
+    expect(nextWindowEnd(bud(2026, 7, 16, 2, 0), W)).toBe(bud(2026, 7, 16, 8, 0));
+  });
+  test("exactly 08:00 → next day's 08:00 (strictly after now)", () => {
+    expect(nextWindowEnd(bud(2026, 7, 15, 8, 0), W)).toBe(bud(2026, 7, 16, 8, 0));
   });
 });
 

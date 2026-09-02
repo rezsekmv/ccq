@@ -1,4 +1,4 @@
-import { isInWindow, nextWindowOpen, nightAnchor, weeklyGuard } from "./guard.ts";
+import { isInWindow, nextWindowEnd, nextWindowOpen, nightAnchor, weeklyGuard } from "./guard.ts";
 import { commitsAhead, finalize, removeWorktree, runJob, type RunOutcome } from "./run.ts";
 import { acquireDaemonLock, clearSignal, loadConfig, loadUsage, mutateQueue, readSignal, releaseDaemonLock } from "./store.ts";
 import { makeTmux, sessionName } from "./tmux.ts";
@@ -180,7 +180,7 @@ async function dispatchOne(cfg: Config): Promise<"ran" | "idle" | { sleepUntil: 
   return "ran";
 }
 
-export async function daemon(once: boolean): Promise<void> {
+export async function daemon(once: boolean, ignoreWindow = false): Promise<void> {
   const cfg = loadConfig();
   if (!acquireDaemonLock()) {
     console.error("another ccq daemon is already running");
@@ -190,7 +190,10 @@ export async function daemon(once: boolean): Promise<void> {
   process.on("SIGINT", () => process.exit(0));
   process.on("SIGTERM", () => process.exit(0));
 
-  log(`ccq daemon up — window ${cfg.window.start}–${cfg.window.end} ${cfg.window.tz}`);
+  // `ccq now`: dispatch immediately, ignoring the off-peak window — but only until the window
+  // next closes (i.e. through to morning), so the following day still respects the window.
+  const runNowUntil = ignoreWindow ? nextWindowEnd(Date.now(), cfg.window) : 0;
+  log(`ccq daemon up — window ${cfg.window.start}–${cfg.window.end} ${cfg.window.tz}${ignoreWindow ? ` (run-now: ignoring window until ${new Date(runNowUntil).toLocaleString()})` : ""}`);
   await reconcile(cfg);
 
   for (;;) {
@@ -198,7 +201,8 @@ export async function daemon(once: boolean): Promise<void> {
     // one failing job must never kill the daemon — log and keep polling
     await sweepNeedsUser(cfg).catch((e) => log(`sweepNeedsUser error: ${e.message}`));
 
-    if (!isInWindow(now, cfg.window)) {
+    const inWindow = isInWindow(now, cfg.window) || now < runNowUntil;
+    if (!inWindow) {
       if (once) return log("outside window — exiting (--once)");
       const open = nextWindowOpen(now, cfg.window);
       const wait = Math.min(cfg.pollIntervalSec * 1000, open - now);

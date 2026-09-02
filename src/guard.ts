@@ -58,6 +58,19 @@ export function nextWindowOpen(now: number, w: WindowCfg): number {
   return now + DAY_MS; // days:[] — never opens; retry tomorrow
 }
 
+/** Next epoch-ms at which the window closes (local time == window.end), strictly after `now`.
+ *  Used by `ccq now` to bound "ignore the window" to the upcoming morning. */
+export function nextWindowEnd(now: number, w: WindowCfg): number {
+  const step = 60_000;
+  const end = hm(w.end);
+  let t = now - (now % step);
+  for (let i = 0; i < 8 * 24 * 60; i++) {
+    t += step;
+    if (localTime(t, w.tz).minutes === end) return t;
+  }
+  return now + DAY_MS;
+}
+
 /** Identifies which night a moment belongs to, for the per-night job counter. */
 export function nightAnchor(now: number, w: WindowCfg): number {
   const step = 60_000;

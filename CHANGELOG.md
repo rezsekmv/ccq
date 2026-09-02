@@ -4,6 +4,14 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.5] - 2026-09-02
+
+### Added
+- `ccq now` — start the daemon and run the queue immediately, ignoring the
+  off-peak window until the next morning (for when you're done at the machine
+  for the day). The weekly guard still applies; normal window behavior resumes
+  after morning.
+
 ## [0.1.4] - 2026-09-02
 
 ### Added
@@ -59,6 +67,7 @@ First public release.
   `--permission-mode`, `--timeout`), `list`, `status`, `mv`, `rm`, `logs`,
   `daemon`, `install-statusline`.
 
+[0.1.5]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.5
 [0.1.4]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.4
 [0.1.3]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.3
 [0.1.2]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.2
