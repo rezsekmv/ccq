@@ -160,6 +160,30 @@ async function cmdClean(): Promise<void> {
   console.log(`cleaned ${removed.length} finished job${removed.length === 1 ? "" : "s"}${cutoff ? ` older than ${daysStr}d` : ""}`);
 }
 
+const DAEMON_SESSION = "ccq";
+
+function daemonSessionAlive(tmuxBin: string): boolean {
+  return spawnSync(tmuxBin, ["has-session", "-t", DAEMON_SESSION]).status === 0;
+}
+
+function cmdStart(): void {
+  const cfg = loadConfig();
+  if (daemonSessionAlive(cfg.tmuxBin)) return console.log(`daemon already running (tmux session '${DAEMON_SESSION}')`);
+  // absolute bun + this cli, so it runs regardless of the tmux shell's PATH
+  const self = `"${process.execPath}" "${process.argv[1]}" daemon`;
+  const inner = process.platform === "darwin" ? `caffeinate -is ${self}` : self; // keep the Mac awake while running
+  const r = spawnSync(cfg.tmuxBin, ["new-session", "-d", "-s", DAEMON_SESSION, inner]);
+  if (r.status !== 0) throw new Error(`failed to start tmux session (is tmux installed?): ${r.stderr?.toString() ?? ""}`);
+  console.log(`daemon started in tmux session '${DAEMON_SESSION}'. Watch: ccq status  |  attach: tmux attach -t ${DAEMON_SESSION}  |  stop: ccq stop`);
+}
+
+function cmdStop(): void {
+  const cfg = loadConfig();
+  if (!daemonSessionAlive(cfg.tmuxBin)) return console.log("daemon not running");
+  spawnSync(cfg.tmuxBin, ["kill-session", "-t", DAEMON_SESSION]);
+  console.log("daemon stopped");
+}
+
 function cmdLogs(): void {
   const idPrefix = args.filter((a) => a !== "-f")[0];
   if (!idPrefix) throw new Error("usage: ccq logs <id> [-f]");
@@ -243,7 +267,9 @@ function help(): void {
   ccq rm <id>
   ccq clean [--days N]        # drop finished jobs (done/failed/cancelled) from the queue
   ccq logs <id> [-f]
-  ccq daemon [--once]
+  ccq start                   # start the daemon (tmux + caffeinate, backgrounded)
+  ccq stop | restart
+  ccq daemon [--once]         # run the daemon in the foreground (start uses this)
   ccq install-statusline [--uninstall]`);
 }
 
@@ -256,6 +282,9 @@ try {
     case "rm": await cmdRm(); break;
     case "clean": await cmdClean(); break;
     case "logs": cmdLogs(); break;
+    case "start": cmdStart(); break;
+    case "stop": cmdStop(); break;
+    case "restart": cmdStop(); cmdStart(); break;
     case "daemon": await daemon(flag("--once")); break;
     case "install-statusline": cmdInstallStatusline(); break;
     case "statusline-tee": await cmdStatuslineTee(); break;

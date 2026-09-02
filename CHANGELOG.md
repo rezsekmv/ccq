@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] - 2026-09-02
+
+### Added
+- `ccq start` / `ccq stop` / `ccq restart` — one command to run the daemon,
+  backgrounded in a tmux session under `caffeinate` (macOS). No more manual
+  `tmux new -s ccq '…'` incantation.
+
 ## [0.1.3] - 2026-09-01
 
 ### Added
@@ -52,6 +59,7 @@ First public release.
   `--permission-mode`, `--timeout`), `list`, `status`, `mv`, `rm`, `logs`,
   `daemon`, `install-statusline`.
 
+[0.1.4]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.4
 [0.1.3]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.3
 [0.1.2]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.2
 [0.1.1]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.1

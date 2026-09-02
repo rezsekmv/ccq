@@ -39,7 +39,8 @@ ccq status                   # window, usage %, guard verdict, night counter
 ccq mv <id> 2                # reorder
 ccq rm <id>                  # cancel (a running job finishes its current run first)
 ccq logs <id> [-f]           # pane snapshots of a job
-ccq daemon                   # foreground; keep it alive: tmux new -s ccq 'ccq daemon'
+ccq start                    # start the daemon (backgrounded in tmux, under caffeinate)
+ccq stop | restart           # stop / restart the daemon
 ccq install-statusline       # wrap the statusline for usage data (--uninstall to revert)
 ```
 
@@ -114,12 +115,14 @@ The daemon does **not** fight system sleep, and this is the #1 cause of a wasted
 
 > ⚠️ **`caffeinate -s` only holds on AC power — on battery it does nothing and the Mac still sleeps.** Also, closing the lid sleeps the machine regardless (clamshell), unless an external display is attached.
 
-So for reliable overnight runs: **plug in, lid open**, and start the daemon under caffeinate:
+So for reliable overnight runs: **plug in, lid open**, and start the daemon:
 
 ```sh
-tmux new -s ccq 'caffeinate -is ccq daemon'
+ccq start   # backgrounds the daemon in a tmux session, wrapped in `caffeinate -is`
 # or disable AC sleep globally: sudo pmset -c sleep 0
 ```
+
+`ccq start` handles the tmux + caffeinate wiring for you (`ccq stop` / `ccq restart` to manage it). To watch it live: `tmux attach -t ccq`.
 
 If a night is lost to sleep anyway, `maxTimeoutRequeues` auto-retries the affected jobs, and a slept night is visible in `ccq status` (jobs still queued, night counter at 0).
 
