@@ -27,6 +27,17 @@ bun link                 # exposes `ccq`
 ccq install-statusline
 ```
 
+### Which Claude config dir?
+
+`install-statusline` edits `settings.json` in the Claude Code config dir: `$CLAUDE_CONFIG_DIR` if set, otherwise `~/.claude` (the same rule Claude Code uses). To target other dirs explicitly, e.g. several agents that each run with their own config dir, repeat `--config-dir`:
+
+```sh
+ccq install-statusline --config-dir ~/agents/a/.claude-config --config-dir ~/agents/b/.claude-config
+ccq install-statusline --uninstall --config-dir ~/agents/a/.claude-config   # restores only that dir
+```
+
+The original `statusLine` is backed up **per dir** (`statuslineBackups` in `~/.ccq/config.json`, keyed by the resolved path), so `--uninstall` restores exactly what was there in each one, or removes the statusline if there was none. All dirs feed the same `~/.ccq/usage.json`. Re-running `install-statusline` on a dir that already has the tee refreshes it if needed (e.g. after bun or ccq moved, or for a tee installed by an older version). `--config-dir=<dir>` works too; a missing value or any unknown argument is an error (never a silent fallback to the default dir). A symlinked `settings.json` is written through to its target, keeping its permissions.
+
 ## Usage
 
 ```sh
@@ -42,7 +53,7 @@ ccq logs <id> [-f]           # pane snapshots of a job
 ccq start                    # start the daemon (backgrounded in tmux, under caffeinate)
 ccq now                      # done for the day? run the queue immediately until morning
 ccq stop | restart           # stop / restart the daemon
-ccq install-statusline       # wrap the statusline for usage data (--uninstall to revert)
+ccq install-statusline       # wrap the statusline for usage data (--uninstall to revert, --config-dir d to target a dir)
 ```
 
 ### `ccq add` flags

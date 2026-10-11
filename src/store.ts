@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync, rmSync, statSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,9 +23,17 @@ export function ensureDirs(): void {
   }
 }
 
-export function atomicWrite(path: string, data: string): void {
+export function atomicWrite(path: string, data: string, mode?: number): void {
   const tmp = `${path}.tmp-${process.pid}`;
-  writeFileSync(tmp, data);
+  if (mode === undefined) {
+    writeFileSync(tmp, data);
+  } else {
+    // create owner-only and exclusively, so the data is never readable at a wider mode;
+    // then widen to `mode` explicitly (writeFileSync's own mode is masked by umask)
+    rmSync(tmp, { force: true });
+    writeFileSync(tmp, data, { mode: 0o600, flag: "wx" });
+    chmodSync(tmp, mode);
+  }
   renameSync(tmp, path);
 }
 
