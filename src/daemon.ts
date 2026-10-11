@@ -1,7 +1,7 @@
 import { isInWindow, nextWindowEnd, nextWindowOpen, nightAnchor, weeklyGuard } from "./guard.ts";
 import { commitsAhead, finalize, removeWorktree, runJob, type RunOutcome } from "./run.ts";
 import { acquireDaemonLock, clearSignal, loadConfig, loadUsage, mutateQueue, readSignal, releaseDaemonLock } from "./store.ts";
-import { makeTmux, sessionName } from "./tmux.ts";
+import { makeTmux, orphanSessions, sessionName } from "./tmux.ts";
 import type { Config, Job } from "./types.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -23,11 +23,12 @@ async function reconcile(cfg: Config): Promise<void> {
     }
   });
   const tmux = makeTmux(cfg.tmuxBin);
-  for (const name of await tmux.listCcqSessions()) {
-    if (!keepAlive.has(name)) {
-      log(`reconcile: killing orphan tmux session ${name}`);
-      await tmux.killSession(name);
-    }
+  // never kill the session the daemon itself runs in, even if it happens to be job-shaped
+  const own = await tmux.ownSession();
+  if (own) keepAlive.add(own);
+  for (const name of orphanSessions(await tmux.listJobSessions(), keepAlive)) {
+    log(`reconcile: killing orphan tmux session ${name}`);
+    await tmux.killSession(name);
   }
 }
 

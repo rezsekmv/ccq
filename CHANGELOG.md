@@ -4,6 +4,19 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Daemon startup reconcile no longer kills every `ccq-*` tmux session: it only
+  matches the exact job-session shape (`ccq-<8 hex chars>`). Previously a
+  daemon started in a tmux session named e.g. `ccq-daemon` killed itself on
+  startup as an "orphan".
+- `ccq start` / `stop` / `now` / `rm` address tmux sessions by exact name.
+  tmux prefix-matches bare targets, so with no `ccq` session, `ccq start`
+  reported "already running" for, and `ccq stop` / `ccq now` killed, another
+  `ccq-*` session (e.g. `ccq-daemon` or a `needs_user` job).
+- Reconcile never kills the tmux session the daemon itself runs in.
+
 ## [0.1.5] - 2026-09-02
 
 ### Added
