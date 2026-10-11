@@ -36,6 +36,15 @@ All notable changes to this project are documented here. Format follows
   the first part ran inside the tee) and stripped its inner quoting
   (`echo "a   b"` printed `a b`). Re-running `ccq install-statusline` upgrades
   an existing tee in place, and also refreshes one whose bun/ccq path moved.
+- Daemon startup reconcile no longer kills every `ccq-*` tmux session: it only
+  matches the exact job-session shape (`ccq-<8 hex chars>`). Previously a
+  daemon started in a tmux session named e.g. `ccq-daemon` killed itself on
+  startup as an "orphan".
+- `ccq start` / `stop` / `now` / `rm` address tmux sessions by exact name.
+  tmux prefix-matches bare targets, so with no `ccq` session, `ccq start`
+  reported "already running" for, and `ccq stop` / `ccq now` killed, another
+  `ccq-*` session (e.g. `ccq-daemon` or a `needs_user` job).
+- Reconcile never kills the tmux session the daemon itself runs in.
 
 ## [0.1.5] - 2026-09-02
 
