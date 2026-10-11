@@ -1,3 +1,5 @@
+import type { StatuslineBackups } from "./statusline.ts";
+
 export type JobState =
   | "queued"
   | "running"
@@ -63,7 +65,9 @@ export interface Config {
   claudeBin: string;
   ghBin: string;
   tmuxBin: string;
-  statuslineBackup: string | null; // original statusLine.command, set by install-statusline
+  statuslineBackups: StatuslineBackups; // per Claude config dir: statusLine before install-statusline
+  /** @deprecated pre-0.1.6 single backup of ~/.claude's statusLine.command; migrated on next install/uninstall. */
+  statuslineBackup?: string | null;
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -83,7 +87,7 @@ export const DEFAULT_CONFIG: Config = {
   claudeBin: "claude",
   ghBin: "gh",
   tmuxBin: "tmux",
-  statuslineBackup: null,
+  statuslineBackups: {},
 };
 
 export interface RateLimit {
