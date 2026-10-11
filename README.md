@@ -123,7 +123,7 @@ ccq start   # backgrounds the daemon in a tmux session, wrapped in `caffeinate -
 # or disable AC sleep globally: sudo pmset -c sleep 0
 ```
 
-`ccq start` handles the tmux + caffeinate wiring for you (`ccq stop` / `ccq restart` to manage it). To watch it live: `tmux attach -t ccq`.
+`ccq start` handles the tmux + caffeinate wiring for you (`ccq stop` / `ccq restart` to manage it). To watch it live: `tmux attach -t ccq`. If you run the daemon by hand in your own tmux session instead, any name works (e.g. `ccq-daemon`): the daemon only ever cleans up sessions shaped exactly `ccq-<8 hex chars>`, and never the session it runs in. Still, avoid job-shaped names like `ccq-12345678` for your own sessions, since a daemon running elsewhere would treat them as orphans.
 
 **Done for the day early?** `ccq now` starts the daemon and runs the queue **immediately**, ignoring the off-peak window until the next morning — handy when you know you won't touch the machine again today. The weekly guard still applies, so it can't blow next week's budget; after morning it reverts to normal window behavior.
 
@@ -147,4 +147,4 @@ Or copy it into a single project's `.claude/skills/ccq/SKILL.md`.
 
 `queued → running → done | failed | paused_limit (limit hit, auto-resumes) | needs_user (attach & answer) | cancelled`.
 
-Crash recovery: on daemon start, `running` jobs become immediately resumable (same session if the prompt already landed, fresh session otherwise) and orphan `ccq-*` tmux sessions are cleaned up — except those belonging to `needs_user` jobs.
+Crash recovery: on daemon start, `running` jobs become immediately resumable (same session if the prompt already landed, fresh session otherwise) and orphan job tmux sessions (exactly `ccq-<id8>`, i.e. `^ccq-[0-9a-f]{8}$`) are cleaned up — except those belonging to `needs_user` jobs.
