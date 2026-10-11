@@ -6,6 +6,22 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- `ccq install-statusline` honors `CLAUDE_CONFIG_DIR` and takes a repeatable
+  `--config-dir <dir>` to target one or more Claude config dirs explicitly
+  (default stays `~/.claude`).
+
+### Changed
+- The statusline backup is now kept per config dir (`statuslineBackups` in
+  `~/.ccq/config.json`), and it keeps the whole original `statusLine` object
+  (e.g. `padding`), not just the command. `--uninstall` restores each dir to
+  its own original, or removes the statusline if there was none. The old
+  single `statuslineBackup` key is migrated automatically.
+- `install-statusline` rejects unknown arguments and a `--config-dir` without
+  a value, instead of ignoring them and editing the default dir.
+- `install-statusline` writes through a symlinked `settings.json` and keeps
+  its file mode (e.g. `0600`).
+
 ### Fixed
 - Jobs no longer die at startup on Claude Code versions whose workspace-trust
   dialog reads "Is this a project you created or one you trust?" with
@@ -15,6 +31,11 @@ All notable changes to this project are documented here. Format follows
   now detected in both wordings and steered to the Yes option, and a dead
   pane is reported as `claude exited during startup` before any readiness
   check.
+- The statusline tee passes the original statusline command as one
+  shell-quoted word. Before, Claude's shell split it at `|`, `;`, `&&` (only
+  the first part ran inside the tee) and stripped its inner quoting
+  (`echo "a   b"` printed `a b`). Re-running `ccq install-statusline` upgrades
+  an existing tee in place, and also refreshes one whose bun/ccq path moved.
 
 ## [0.1.5] - 2026-09-02
 

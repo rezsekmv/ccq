@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -7,7 +7,8 @@ import { daemon } from "./daemon.ts";
 import { isInWindow, nextWindowOpen, weeklyGuard } from "./guard.ts";
 import { PATHS, atomicWrite, ensureDirs, isCleanable, loadConfig, loadQueue, loadUsage, logPath, mutateQueue, saveConfig, signalPath } from "./store.ts";
 import { sessionName } from "./tmux.ts";
-import { newJob, type Job } from "./types.ts";
+import { buildTeeCommand, canonicalDir, installTee, isTeeInstalled, parseInstallArgs, refreshTee, resolveConfigDirs, resolveLink, uninstallTee, wrappedCommand } from "./statusline.ts";
+import { newJob, type Config, type Job } from "./types.ts";
 
 const args = process.argv.slice(2);
 const cmd = args.shift() ?? "help";
@@ -203,30 +204,84 @@ function cmdLogs(): void {
   }
 }
 
-const CLAUDE_SETTINGS = join(homedir(), ".claude", "settings.json");
-
 function cmdInstallStatusline(): void {
+  const { uninstall, configDirs } = parseInstallArgs(args);
+  const targets = resolveConfigDirs(configDirs, process.env);
   const cfg = loadConfig();
-  const settings = JSON.parse(readFileSync(CLAUDE_SETTINGS, "utf8"));
+  migrateLegacyBackup(cfg);
   const self = process.argv[1];
+  const tee = (original: string) => buildTeeCommand(process.execPath, self!, original);
 
-  if (flag("--uninstall")) {
-    if (!cfg.statuslineBackup) throw new Error("no backup recorded — nothing to uninstall");
-    settings.statusLine = { type: "command", command: cfg.statuslineBackup };
-    atomicWrite(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
-    cfg.statuslineBackup = null;
-    saveConfig(cfg);
-    return console.log("statusline restored");
+  let failed = 0;
+  for (const dir of targets) {
+    try {
+      if (!existsSync(dir)) throw new Error("config dir does not exist");
+      const path = join(dir, "settings.json");
+      const settings = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
+
+      if (uninstall) {
+        if (!isTeeInstalled(settings)) {
+          console.log(`${dir}: not installed`); // keep any recorded backup: nothing was restored from it
+          continue;
+        }
+        const backup = Object.hasOwn(cfg.statuslineBackups, dir) ? cfg.statuslineBackups[dir] : undefined;
+        writeSettings(path, uninstallTee(settings, backup));
+        delete cfg.statuslineBackups[dir];
+        saveConfig(cfg);
+        console.log(`${dir}: statusline restored`);
+        continue;
+      }
+
+      const r = installTee(settings, tee);
+      if (!r) {
+        // the wrapped command is authoritative (it may have been hand-edited); legacy raw text is exact too
+        const refreshed = refreshTee(settings, wrappedCommand(settings), tee);
+        if (refreshed) writeSettings(path, refreshed);
+        console.log(`${dir}: ${refreshed ? "statusline tee refreshed" : "already installed"}`);
+        continue;
+      }
+      cfg.statuslineBackups[dir] = r.backup; // record before touching settings, so uninstall can always restore
+      saveConfig(cfg);
+      writeSettings(path, r.settings);
+      console.log(`${dir}: statusline tee installed (original backed up in ${PATHS.config})`);
+    } catch (e: any) {
+      failed++;
+      console.error(`${dir}: ${e.message}`);
+    }
   }
+  if (uninstall && configDirs.length === 0) hintDefaultDir(targets);
+  if (failed > 0) process.exit(1);
+}
 
-  const current: string = settings.statusLine?.command ?? "";
-  if (current.includes("statusline-tee")) return console.log("already installed");
-  cfg.statuslineBackup = current || null;
+/** With CLAUDE_CONFIG_DIR set, a tee installed earlier into ~/.claude is no longer a target; say so. */
+function hintDefaultDir(targets: string[]): void {
+  const def = canonicalDir(join(homedir(), ".claude"));
+  if (targets.includes(def)) return;
+  try {
+    if (isTeeInstalled(JSON.parse(readFileSync(join(def, "settings.json"), "utf8")))) {
+      console.log(`note: ${def} still has the tee; remove it with: ccq install-statusline --uninstall --config-dir ${def}`);
+    }
+  } catch {}
+}
+
+/** Write through a symlinked settings.json to its target and keep the file's permissions
+ *  (a plain atomicWrite would replace the link and reset e.g. 0600 to the umask default). */
+function writeSettings(path: string, settings: Record<string, any>): void {
+  const target = resolveLink(path);
+  const mode = existsSync(target) ? statSync(target).mode & 0o777 : undefined;
+  atomicWrite(target, JSON.stringify(settings, null, 2), mode);
+}
+
+/** Pre-0.1.6 configs kept a single `statuslineBackup` command for ~/.claude; move it to the per-dir map. */
+function migrateLegacyBackup(cfg: Config): void {
+  cfg.statuslineBackups = { ...cfg.statuslineBackups }; // never mutate the shared DEFAULT_CONFIG object
+  if (cfg.statuslineBackup === undefined) return;
+  const legacy = cfg.statuslineBackup;
+  const dir = canonicalDir(join(homedir(), ".claude"));
+  // a null legacy backup is ambiguous (never installed vs. no original); leave it to uninstallTee's recovery
+  if (legacy && !Object.hasOwn(cfg.statuslineBackups, dir)) cfg.statuslineBackups[dir] = { type: "command", command: legacy };
+  delete cfg.statuslineBackup;
   saveConfig(cfg);
-  const tee = `"${process.execPath}" "${self}" statusline-tee${current ? ` -- ${current}` : ""}`;
-  settings.statusLine = { type: "command", command: tee };
-  atomicWrite(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
-  console.log(`statusline tee installed (original backed up in ${PATHS.config})`);
 }
 
 async function cmdStatuslineTee(): Promise<void> {
@@ -278,7 +333,8 @@ function help(): void {
   ccq now                     # start & run immediately, ignoring the off-peak window until morning
   ccq stop | restart
   ccq daemon [--once] [--now] # run the daemon in the foreground (start/now use this)
-  ccq install-statusline [--uninstall]`);
+  ccq install-statusline [--uninstall] [--config-dir dir]...
+                              # default dir: $CLAUDE_CONFIG_DIR, else ~/.claude`);
 }
 
 try {
