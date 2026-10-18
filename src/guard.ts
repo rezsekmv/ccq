@@ -161,7 +161,10 @@ export function parseLimitError(text: string, now: number = Date.now()): LimitHi
 // (not scrollback) — a dismissed dialog's text lingers in history and would re-trigger.
 // The "❯ 1. Yes" selector line only renders while a dialog is actually open.
 const PERMISSION_RE = /❯\s*1\.\s*yes/i;
-const TRUST_RE = /do you trust the files in this folder/i;
+// Older CLIs ask "Do you trust the files in this folder?" with "Yes, proceed" preselected.
+// Newer ones ask "Is this a project you created or one you trust?" with "No, exit" preselected,
+// so a blind Enter (or the Escape sent once the composer looks ready) exits claude.
+const TRUST_RE = /do you trust the files in this folder|is this a project you created or one you trust|yes, i trust this folder/i;
 
 export function looksLikePermissionDialog(pane: string): boolean {
   return PERMISSION_RE.test(pane) && !TRUST_RE.test(pane);
@@ -169,4 +172,11 @@ export function looksLikePermissionDialog(pane: string): boolean {
 
 export function looksLikeTrustDialog(pane: string): boolean {
   return TRUST_RE.test(pane);
+}
+
+/** Key that moves an open trust dialog towards "Yes": Enter when the ❯ selector is already on the
+ *  Yes option, otherwise Down (the caller re-reads the pane and asks again). */
+export function trustDialogKey(pane: string): "Enter" | "Down" {
+  const selected = pane.split("\n").find((l) => /^\s*❯/.test(l)) ?? "";
+  return /yes/i.test(selected) ? "Enter" : "Down";
 }

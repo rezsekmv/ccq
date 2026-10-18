@@ -4,6 +4,18 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Jobs no longer die at startup on Claude Code versions whose workspace-trust
+  dialog reads "Is this a project you created or one you trust?" with
+  "No, exit" preselected. The dialog was not recognised, its `❯ No, exit`
+  line passed as a ready composer, and the Escape sent next exited claude,
+  so every job failed with `tmux paste-buffer failed`. The trust dialog is
+  now detected in both wordings and steered to the Yes option, and a dead
+  pane is reported as `claude exited during startup` before any readiness
+  check.
+
 ## [0.1.5] - 2026-09-02
 
 ### Added

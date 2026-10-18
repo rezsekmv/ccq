@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { looksLikePermissionDialog, looksLikeTrustDialog, parseLimitError, type LimitHit } from "./guard.ts";
+import { looksLikePermissionDialog, looksLikeTrustDialog, parseLimitError, trustDialogKey, type LimitHit } from "./guard.ts";
 import { appendLog, clearSignal, ensureHookSettings, persistJobFields, readSignal, worktreePath } from "./store.ts";
 import { makeTmux, sessionName, type Tmux } from "./tmux.ts";
 import type { Config, Job } from "./types.ts";
@@ -67,8 +67,10 @@ async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: numb
   let prev = "";
   while (Date.now() < deadline) {
     const pane = await tmux.captureVisible(name);
+    // A dead pane keeps its last screen (remain-on-exit); never read it as a ready composer.
+    if (await tmux.paneDead(name)) throw new Error(`claude exited during startup:\n${pane.trim().slice(-2000)}`);
     if (looksLikeTrustDialog(pane)) {
-      await tmux.sendKeys(name, ["Enter"]); // "Yes, proceed" is the default selection
+      await tmux.sendKeys(name, [trustDialogKey(pane)]); // the default option differs across CLI versions
       await sleep(1500);
       prev = "";
       continue;
@@ -81,7 +83,6 @@ async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: numb
       await sleep(800);
       return;
     }
-    if (await tmux.paneDead(name)) throw new Error(`claude exited during startup:\n${pane.trim().slice(-2000)}`);
     prev = pane;
     await sleep(2000);
   }
@@ -186,7 +187,7 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
 
     const visible = await tmux.captureVisible(name).catch(() => "");
     if (looksLikeTrustDialog(visible)) {
-      await tmux.sendKeys(name, ["Enter"]);
+      await tmux.sendKeys(name, [trustDialogKey(visible)]);
       await sleep(1500);
       continue;
     }

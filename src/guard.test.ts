@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isInWindow, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, weeklyGuard } from "./guard.ts";
+import { isInWindow, looksLikePermissionDialog, looksLikeTrustDialog, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, trustDialogKey, weeklyGuard } from "./guard.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 import type { UsageSnapshot, WindowCfg } from "./types.ts";
 
@@ -121,5 +121,41 @@ describe("parseLimitError", () => {
 
   test("garbage → null", () => {
     expect(parseLimitError("some unrelated error", now)).toBeNull();
+  });
+});
+
+describe("trust dialog", () => {
+  const NEW_DIALOG = [
+    " Accessing workspace:",
+    " /Users/x/.ccq/worktrees/abc",
+    " Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team).",
+    " Claude Code'll be able to read, edit, and execute files here.",
+    " ❯ No, exit",
+    "   Yes, I trust this folder",
+    " Enter to confirm · Esc to cancel",
+  ].join("\n");
+  const OLD_DIALOG = [
+    " Do you trust the files in this folder?",
+    " ❯ 1. Yes, proceed",
+    "   2. No, exit",
+  ].join("\n");
+
+  test("detects the current wording", () => {
+    expect(looksLikeTrustDialog(NEW_DIALOG)).toBe(true);
+    expect(looksLikePermissionDialog(NEW_DIALOG)).toBe(false);
+  });
+  test("still detects the older wording", () => {
+    expect(looksLikeTrustDialog(OLD_DIALOG)).toBe(true);
+    expect(looksLikePermissionDialog(OLD_DIALOG)).toBe(false);
+  });
+  test("moves off a preselected No instead of confirming it", () => {
+    expect(trustDialogKey(NEW_DIALOG)).toBe("Down");
+  });
+  test("confirms once Yes is selected", () => {
+    expect(trustDialogKey(NEW_DIALOG.replace("❯ No, exit", "  No, exit").replace("   Yes, I trust", " ❯ Yes, I trust"))).toBe("Enter");
+    expect(trustDialogKey(OLD_DIALOG)).toBe("Enter");
+  });
+  test("an ordinary composer is not a trust dialog", () => {
+    expect(looksLikeTrustDialog("❯ \n? for shortcuts")).toBe(false);
   });
 });
