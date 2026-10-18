@@ -164,19 +164,27 @@ const PERMISSION_RE = /❯\s*1\.\s*yes/i;
 // Older CLIs ask "Do you trust the files in this folder?" with "Yes, proceed" preselected.
 // Newer ones ask "Is this a project you created or one you trust?" with "No, exit" preselected,
 // so a blind Enter (or the Escape sent once the composer looks ready) exits claude.
-const TRUST_RE = /do you trust the files in this folder|is this a project you created or one you trust|yes, i trust this folder/i;
-
-export function looksLikePermissionDialog(pane: string): boolean {
-  return PERMISSION_RE.test(pane) && !TRUST_RE.test(pane);
-}
+// Both patterns are anchored to whole dialog lines: a permission dialog whose diff preview quotes
+// this text (a job editing this file, or injected content) must not read as a trust dialog,
+// or the Enter meant for "trust" would approve the tool call.
+const TRUST_HEADER_RE = /^\s*(?:do you trust the files in this folder\?|quick safety check: is this a project you created or one you trust\?)/im;
+const TRUST_YES_LINE_RE = /^\s*(?:❯\s*)?(?:\d\.\s*)?(?:yes, proceed|yes, i trust this folder)\s*$/im;
+const TRUST_YES_SELECTED_RE = /^\s*❯\s*(?:\d\.\s*)?(?:yes, proceed|yes, i trust this folder)\s*$/im;
 
 export function looksLikeTrustDialog(pane: string): boolean {
-  return TRUST_RE.test(pane);
+  return TRUST_HEADER_RE.test(pane) && TRUST_YES_LINE_RE.test(pane);
 }
 
-/** Key that moves an open trust dialog towards "Yes": Enter when the ❯ selector is already on the
- *  Yes option, otherwise Down (the caller re-reads the pane and asks again). */
-export function trustDialogKey(pane: string): "Enter" | "Down" {
-  const selected = pane.split("\n").find((l) => /^\s*❯/.test(l)) ?? "";
-  return /yes/i.test(selected) ? "Enter" : "Down";
+export function looksLikePermissionDialog(pane: string): boolean {
+  return PERMISSION_RE.test(pane) && !looksLikeTrustDialog(pane);
 }
+
+/** Key that moves an open trust dialog towards "Yes": Enter only when the ❯ selector sits on the
+ *  Yes option line itself, otherwise Down (the caller re-reads the pane and bounds the presses). */
+export function trustDialogKey(pane: string): "Enter" | "Down" {
+  return TRUST_YES_SELECTED_RE.test(pane) ? "Enter" : "Down";
+}
+
+/** Trust-dialog key presses allowed before giving up: the dialog has two options, so this is
+ *  generous; an unexpected layout fails the job instead of cycling forever. */
+export const MAX_TRUST_KEYS = 6;

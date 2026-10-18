@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { looksLikePermissionDialog, looksLikeTrustDialog, parseLimitError, trustDialogKey, type LimitHit } from "./guard.ts";
+import { looksLikePermissionDialog, looksLikeTrustDialog, MAX_TRUST_KEYS, parseLimitError, trustDialogKey, type LimitHit } from "./guard.ts";
 import { appendLog, clearSignal, ensureHookSettings, persistJobFields, readSignal, worktreePath } from "./store.ts";
 import { makeTmux, sessionName, type Tmux } from "./tmux.ts";
 import type { Config, Job } from "./types.ts";
@@ -65,11 +65,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: number): Promise<void> {
   const deadline = Date.now() + timeoutSec * 1000;
   let prev = "";
+  let trustKeys = 0;
   while (Date.now() < deadline) {
     const pane = await tmux.captureVisible(name);
     // A dead pane keeps its last screen (remain-on-exit); never read it as a ready composer.
     if (await tmux.paneDead(name)) throw new Error(`claude exited during startup:\n${pane.trim().slice(-2000)}`);
     if (looksLikeTrustDialog(pane)) {
+      if (++trustKeys > MAX_TRUST_KEYS) throw new Error(`trust dialog not accepted after ${MAX_TRUST_KEYS} keys:\n${pane.trim().slice(-2000)}`);
       await tmux.sendKeys(name, [trustDialogKey(pane)]); // the default option differs across CLI versions
       await sleep(1500);
       prev = "";
@@ -161,6 +163,7 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
   const deadline = Date.now() + timeoutMs;
   let lastPane = "";
   let lastLogAt = 0;
+  let trustKeys = 0;
 
   while (Date.now() < deadline) {
     await sleep(5000);
@@ -185,12 +188,14 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
       return { kind: "done", transcriptPath: signal.transcript_path ?? null };
     }
 
-    const visible = await tmux.captureVisible(name).catch(() => "");
-    if (looksLikeTrustDialog(visible)) {
-      await tmux.sendKeys(name, [trustDialogKey(visible)]);
-      await sleep(1500);
-      continue;
+    if (await tmux.paneDead(name)) {
+      appendLog(job.id, pane);
+      await tmux.killSession(name);
+      return { kind: "error", errorText: `claude exited without Stop signal:\n${lastPane.trim().slice(-2000)}` };
     }
+
+    // Permission before trust: an Enter on a misread permission dialog would approve the tool call.
+    const visible = await tmux.captureVisible(name).catch(() => "");
     if (looksLikePermissionDialog(visible)) {
       job.denials++;
       if (job.denials > cfg.maxDenials) {
@@ -202,11 +207,15 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
       await sleep(3000);
       continue;
     }
-
-    if (await tmux.paneDead(name)) {
-      appendLog(job.id, pane);
-      await tmux.killSession(name);
-      return { kind: "error", errorText: `claude exited without Stop signal:\n${lastPane.trim().slice(-2000)}` };
+    if (looksLikeTrustDialog(visible)) {
+      if (++trustKeys > MAX_TRUST_KEYS) {
+        appendLog(job.id, visible);
+        await tmux.killSession(name);
+        return { kind: "error", errorText: `trust dialog not accepted after ${MAX_TRUST_KEYS} keys` };
+      }
+      await tmux.sendKeys(name, [trustDialogKey(visible)]);
+      await sleep(1500);
+      continue;
     }
   }
 

@@ -155,6 +155,27 @@ describe("trust dialog", () => {
     expect(trustDialogKey(NEW_DIALOG.replace("❯ No, exit", "  No, exit").replace("   Yes, I trust", " ❯ Yes, I trust"))).toBe("Enter");
     expect(trustDialogKey(OLD_DIALOG)).toBe("Enter");
   });
+  test("a permission dialog quoting the trust text stays a permission dialog", () => {
+    const pane = [
+      " Edit file src/guard.ts",
+      "  167 -const TRUST_RE = /do you trust the files in this folder/i;",
+      "  167 +const TRUST_RE = /do you trust the files in this folder|is this a project you created or one you trust|yes, i trust this folder/i;",
+      "  168 +// Quick safety check: Is this a project you created or one you trust?",
+      "  169 +//   Yes, I trust this folder",
+      " Do you want to make this edit to guard.ts?",
+      " ❯ 1. Yes",
+      "   2. Yes, allow all edits during this session",
+      "   3. No",
+    ].join("\n");
+    expect(looksLikeTrustDialog(pane)).toBe(false);
+    expect(looksLikePermissionDialog(pane)).toBe(true);
+  });
+  test("a prose mention of the wording is not a trust dialog", () => {
+    expect(looksLikeTrustDialog(' The dialog reads "Is this a project you created or one you trust?" with "No, exit" preselected.')).toBe(false);
+  });
+  test("Yes inside another selected line does not confirm", () => {
+    expect(trustDialogKey(NEW_DIALOG.replace("❯ No, exit", "❯ No, exit (Yes is below)"))).toBe("Down");
+  });
   test("an ordinary composer is not a trust dialog", () => {
     expect(looksLikeTrustDialog("❯ \n? for shortcuts")).toBe(false);
   });
