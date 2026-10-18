@@ -175,10 +175,6 @@ export function looksLikeTrustDialog(pane: string): boolean {
   return TRUST_HEADER_RE.test(pane) && TRUST_YES_LINE_RE.test(pane);
 }
 
-export function looksLikePermissionDialog(pane: string): boolean {
-  return PERMISSION_RE.test(pane) && !looksLikeTrustDialog(pane);
-}
-
 /** Any "❯ 1. Yes" selector, trust exclusion deliberately NOT applied. The job loop runs after the
  *  prompt is sent, when tool output can put arbitrary text on screen (a heredoc can print a whole
  *  fake trust dialog), so there every selector is treated as a permission prompt and denied. */

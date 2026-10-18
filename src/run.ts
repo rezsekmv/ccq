@@ -62,7 +62,9 @@ export async function ensureWorktree(job: Job, cfg: Config): Promise<void> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: number): Promise<void> {
+/** `resuming`: the folder was trusted on the first run, and a resumed session replays earlier output
+ *  that may contain trust-dialog text, so the trust handling is skipped entirely. */
+async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: number, resuming: boolean): Promise<void> {
   const deadline = Date.now() + timeoutSec * 1000;
   let prev = "";
   let trustKeys = 0;
@@ -70,7 +72,7 @@ async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: numb
     const pane = await tmux.captureVisible(name);
     // A dead pane keeps its last screen (remain-on-exit); never read it as a ready composer.
     if (await tmux.paneDead(name)) throw new Error(`claude exited during startup:\n${pane.trim().slice(-2000)}`);
-    if (looksLikeTrustDialog(pane)) {
+    if (!resuming && looksLikeTrustDialog(pane)) {
       if (++trustKeys > MAX_TRUST_KEYS) throw new Error(`trust dialog not accepted after ${MAX_TRUST_KEYS} keys:\n${pane.trim().slice(-2000)}`);
       await tmux.sendKeys(name, [trustDialogKey(pane)]); // the default option differs across CLI versions
       await sleep(1500);
@@ -107,6 +109,7 @@ function tokensNonzero(pane: string): boolean {
 
 async function submitPrompt(tmux: Tmux, name: string, job: Job, text: string): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt++) {
+    if (await tmux.paneDead(name)) throw new Error("claude exited before the prompt was sent");
     await tmux.paste(name, text);
     await sleep(5000);
     const pane = await tmux.captureVisible(name);
@@ -149,7 +152,7 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
   await tmux.newSession(name, job.worktree!, parts.filter(Boolean).join(" "));
 
   try {
-    await waitForReady(tmux, name, job, cfg.readyTimeoutSec);
+    await waitForReady(tmux, name, job, cfg.readyTimeoutSec, resuming);
     await submitPrompt(tmux, name, job, resuming ? (job.resumeMessage ?? "continue") : job.prompt);
     job.promptSent = true;
     await persistJobFields(job.id, { promptSent: true });
@@ -194,8 +197,8 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
       return { kind: "error", errorText: `claude exited without Stop signal:\n${lastPane.trim().slice(-2000)}` };
     }
 
-    // The trust dialog is answered only in waitForReady, before the prompt is sent and before any
-    // tool output can reach the screen. Here a selector is always a permission prompt: deny it.
+    // The trust dialog is answered only in waitForReady (first run only, before the prompt is sent,
+    // so no tool output is on screen yet). Here a selector is always a permission prompt: deny it.
     const visible = await tmux.captureVisible(name).catch(() => "");
     if (hasYesSelector(visible)) {
       job.denials++;

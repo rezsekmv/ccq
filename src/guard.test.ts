@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hasYesSelector, isInWindow, looksLikePermissionDialog, looksLikeTrustDialog, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, trustDialogKey, weeklyGuard } from "./guard.ts";
+import { hasYesSelector, isInWindow, looksLikeTrustDialog, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, trustDialogKey, weeklyGuard } from "./guard.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 import type { UsageSnapshot, WindowCfg } from "./types.ts";
 
@@ -142,11 +142,9 @@ describe("trust dialog", () => {
 
   test("detects the current wording", () => {
     expect(looksLikeTrustDialog(NEW_DIALOG)).toBe(true);
-    expect(looksLikePermissionDialog(NEW_DIALOG)).toBe(false);
   });
   test("still detects the older wording", () => {
     expect(looksLikeTrustDialog(OLD_DIALOG)).toBe(true);
-    expect(looksLikePermissionDialog(OLD_DIALOG)).toBe(false);
   });
   test("moves off a preselected No instead of confirming it", () => {
     expect(trustDialogKey(NEW_DIALOG)).toBe("Down");
@@ -168,7 +166,7 @@ describe("trust dialog", () => {
       "   3. No",
     ].join("\n");
     expect(looksLikeTrustDialog(pane)).toBe(false);
-    expect(looksLikePermissionDialog(pane)).toBe(true);
+    expect(hasYesSelector(pane)).toBe(true);
   });
   test("a prose mention of the wording is not a trust dialog", () => {
     expect(looksLikeTrustDialog(' The dialog reads "Is this a project you created or one you trust?" with "No, exit" preselected.')).toBe(false);
