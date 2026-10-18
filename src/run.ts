@@ -72,6 +72,9 @@ async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: numb
     const pane = await tmux.captureVisible(name);
     // A dead pane keeps its last screen (remain-on-exit); never read it as a ready composer.
     if (await tmux.paneDead(name)) throw new Error(`claude exited during startup:\n${pane.trim().slice(-2000)}`);
+    // On resume the folder should already be trusted; if the stored trust is gone, fail clearly
+    // instead of letting the preselected "No, exit" pass the composer check below.
+    if (resuming && looksLikeTrustDialog(pane)) throw new Error("workspace not trusted on resume (stored trust is gone)");
     if (!resuming && looksLikeTrustDialog(pane)) {
       if (++trustKeys > MAX_TRUST_KEYS) throw new Error(`trust dialog not accepted after ${MAX_TRUST_KEYS} keys:\n${pane.trim().slice(-2000)}`);
       await tmux.sendKeys(name, [trustDialogKey(pane)]); // the default option differs across CLI versions
