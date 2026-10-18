@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { looksLikePermissionDialog, looksLikeTrustDialog, MAX_TRUST_KEYS, parseLimitError, trustDialogKey, type LimitHit } from "./guard.ts";
+import { hasYesSelector, looksLikeTrustDialog, MAX_TRUST_KEYS, parseLimitError, trustDialogKey, type LimitHit } from "./guard.ts";
 import { appendLog, clearSignal, ensureHookSettings, persistJobFields, readSignal, worktreePath } from "./store.ts";
 import { makeTmux, sessionName, type Tmux } from "./tmux.ts";
 import type { Config, Job } from "./types.ts";
@@ -83,6 +83,7 @@ async function waitForReady(tmux: Tmux, name: string, job: Job, timeoutSec: numb
       // paste+Enter. Escape dismisses it (harmless if none); then the composer is clear to type.
       await tmux.sendKeys(name, ["Escape"]);
       await sleep(800);
+      if (await tmux.paneDead(name)) throw new Error(`claude exited during startup:\n${pane.trim().slice(-2000)}`);
       return;
     }
     prev = pane;
@@ -110,7 +111,7 @@ async function submitPrompt(tmux: Tmux, name: string, job: Job, text: string): P
     await sleep(5000);
     const pane = await tmux.captureVisible(name);
     // accepted = working / tokens consumed / finished / limit / dialog — main loop handles each
-    if (ACTIVITY_RE.test(pane) || tokensNonzero(pane) || readSignal(job.id) || parseLimitError(pane) || looksLikePermissionDialog(pane)) return;
+    if (ACTIVITY_RE.test(pane) || tokensNonzero(pane) || readSignal(job.id) || parseLimitError(pane) || hasYesSelector(pane)) return;
     appendLog(job.id, `paste attempt ${attempt} not accepted, retrying\n${pane.slice(-1500)}`);
     await tmux.sendKeys(name, ["Escape"]); // clear any stuck panel/partial input before re-paste
     await sleep(3000);
@@ -163,7 +164,6 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
   const deadline = Date.now() + timeoutMs;
   let lastPane = "";
   let lastLogAt = 0;
-  let trustKeys = 0;
 
   while (Date.now() < deadline) {
     await sleep(5000);
@@ -194,9 +194,10 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
       return { kind: "error", errorText: `claude exited without Stop signal:\n${lastPane.trim().slice(-2000)}` };
     }
 
-    // Permission before trust: an Enter on a misread permission dialog would approve the tool call.
+    // The trust dialog is answered only in waitForReady, before the prompt is sent and before any
+    // tool output can reach the screen. Here a selector is always a permission prompt: deny it.
     const visible = await tmux.captureVisible(name).catch(() => "");
-    if (looksLikePermissionDialog(visible)) {
+    if (hasYesSelector(visible)) {
       job.denials++;
       if (job.denials > cfg.maxDenials) {
         appendLog(job.id, `needs_user: permission dialog persisted after ${cfg.maxDenials} denials\n${visible}`);
@@ -205,16 +206,6 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
       appendLog(job.id, `auto-denying permission dialog (${job.denials}/${cfg.maxDenials})\n${visible}`);
       await tmux.sendKeys(name, ["Escape"]); // Esc = reject/dismiss, Claude continues with denial
       await sleep(3000);
-      continue;
-    }
-    if (looksLikeTrustDialog(visible)) {
-      if (++trustKeys > MAX_TRUST_KEYS) {
-        appendLog(job.id, visible);
-        await tmux.killSession(name);
-        return { kind: "error", errorText: `trust dialog not accepted after ${MAX_TRUST_KEYS} keys` };
-      }
-      await tmux.sendKeys(name, [trustDialogKey(visible)]);
-      await sleep(1500);
       continue;
     }
   }

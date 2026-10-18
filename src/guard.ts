@@ -167,9 +167,9 @@ const PERMISSION_RE = /❯\s*1\.\s*yes/i;
 // Both patterns are anchored to whole dialog lines: a permission dialog whose diff preview quotes
 // this text (a job editing this file, or injected content) must not read as a trust dialog,
 // or the Enter meant for "trust" would approve the tool call.
-const TRUST_HEADER_RE = /^\s*(?:do you trust the files in this folder\?|quick safety check: is this a project you created or one you trust\?)/im;
-const TRUST_YES_LINE_RE = /^\s*(?:❯\s*)?(?:\d\.\s*)?(?:yes, proceed|yes, i trust this folder)\s*$/im;
-const TRUST_YES_SELECTED_RE = /^\s*❯\s*(?:\d\.\s*)?(?:yes, proceed|yes, i trust this folder)\s*$/im;
+const TRUST_HEADER_RE = /^[\s│]*(?:do you trust the files in this folder\?|quick safety check: is this a project you created or one you trust\?)/im;
+const TRUST_YES_LINE_RE = /^[\s│]*(?:❯\s*)?(?:\d\.\s*)?(?:yes, proceed|yes, i trust this folder)[\s│]*$/im;
+const TRUST_YES_SELECTED_RE = /^[\s│]*❯\s*(?:\d\.\s*)?(?:yes, proceed|yes, i trust this folder)[\s│]*$/im;
 
 export function looksLikeTrustDialog(pane: string): boolean {
   return TRUST_HEADER_RE.test(pane) && TRUST_YES_LINE_RE.test(pane);
@@ -177,6 +177,13 @@ export function looksLikeTrustDialog(pane: string): boolean {
 
 export function looksLikePermissionDialog(pane: string): boolean {
   return PERMISSION_RE.test(pane) && !looksLikeTrustDialog(pane);
+}
+
+/** Any "❯ 1. Yes" selector, trust exclusion deliberately NOT applied. The job loop runs after the
+ *  prompt is sent, when tool output can put arbitrary text on screen (a heredoc can print a whole
+ *  fake trust dialog), so there every selector is treated as a permission prompt and denied. */
+export function hasYesSelector(pane: string): boolean {
+  return PERMISSION_RE.test(pane);
 }
 
 /** Key that moves an open trust dialog towards "Yes": Enter only when the ❯ selector sits on the
