@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-19
+
 ### Added
 - `ccq install-statusline` honors `CLAUDE_CONFIG_DIR` and takes a repeatable
   `--config-dir <dir>` to target one or more Claude config dirs explicitly
