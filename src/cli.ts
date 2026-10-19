@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { daemon } from "./daemon.ts";
 import { isInWindow, nextWindowOpen, weeklyGuard } from "./guard.ts";
 import { PATHS, atomicWrite, ensureDirs, isCleanable, loadConfig, loadQueue, loadUsage, logPath, mutateQueue, saveConfig, signalPath } from "./store.ts";
-import { sessionName } from "./tmux.ts";
+import { sessionName, sessionTarget } from "./tmux.ts";
 import { buildTeeCommand, canonicalDir, installTee, isTeeInstalled, parseInstallArgs, refreshTee, resolveConfigDirs, resolveLink, uninstallTee, wrappedCommand } from "./statusline.ts";
 import { newJob, type Config, type Job } from "./types.ts";
 
@@ -139,7 +139,7 @@ async function cmdRm(): Promise<void> {
     spawnSync("git", ["-C", job.repo, "worktree", "remove", "--force", job.worktree]);
     spawnSync("git", ["-C", job.repo, "worktree", "prune"]);
   }
-  spawnSync(loadConfig().tmuxBin, ["kill-session", "-t", sessionName(job.id)]);
+  spawnSync(loadConfig().tmuxBin, ["kill-session", "-t", sessionTarget(sessionName(job.id))]);
   console.log(`cancelled ${job.id.slice(0, 8)}`);
 }
 
@@ -164,14 +164,14 @@ async function cmdClean(): Promise<void> {
 const DAEMON_SESSION = "ccq";
 
 function daemonSessionAlive(tmuxBin: string): boolean {
-  return spawnSync(tmuxBin, ["has-session", "-t", DAEMON_SESSION]).status === 0;
+  return spawnSync(tmuxBin, ["has-session", "-t", sessionTarget(DAEMON_SESSION)]).status === 0;
 }
 
 function cmdStart(now = false): void {
   const cfg = loadConfig();
   if (daemonSessionAlive(cfg.tmuxBin)) {
     if (!now) return console.log(`daemon already running (tmux session '${DAEMON_SESSION}')`);
-    spawnSync(cfg.tmuxBin, ["kill-session", "-t", DAEMON_SESSION]); // `ccq now` restarts into run-now mode
+    spawnSync(cfg.tmuxBin, ["kill-session", "-t", sessionTarget(DAEMON_SESSION)]); // `ccq now` restarts into run-now mode
   }
   // absolute bun + this cli, so it runs regardless of the tmux shell's PATH
   const self = `"${process.execPath}" "${process.argv[1]}" daemon${now ? " --now" : ""}`;
@@ -188,7 +188,7 @@ function cmdStart(now = false): void {
 function cmdStop(): void {
   const cfg = loadConfig();
   if (!daemonSessionAlive(cfg.tmuxBin)) return console.log("daemon not running");
-  spawnSync(cfg.tmuxBin, ["kill-session", "-t", DAEMON_SESSION]);
+  spawnSync(cfg.tmuxBin, ["kill-session", "-t", sessionTarget(DAEMON_SESSION)]);
   console.log("daemon stopped");
 }
 
