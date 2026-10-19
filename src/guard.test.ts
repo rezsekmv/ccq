@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isInWindow, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, weeklyGuard } from "./guard.ts";
+import { hasYesSelector, isInWindow, looksLikeTrustDialog, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, trustDialogKey, weeklyGuard } from "./guard.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 import type { UsageSnapshot, WindowCfg } from "./types.ts";
 
@@ -121,5 +121,81 @@ describe("parseLimitError", () => {
 
   test("garbage → null", () => {
     expect(parseLimitError("some unrelated error", now)).toBeNull();
+  });
+});
+
+describe("trust dialog", () => {
+  const NEW_DIALOG = [
+    " Accessing workspace:",
+    " /Users/x/.ccq/worktrees/abc",
+    " Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team).",
+    " Claude Code'll be able to read, edit, and execute files here.",
+    " ❯ No, exit",
+    "   Yes, I trust this folder",
+    " Enter to confirm · Esc to cancel",
+  ].join("\n");
+  const OLD_DIALOG = [
+    " Do you trust the files in this folder?",
+    " ❯ 1. Yes, proceed",
+    "   2. No, exit",
+  ].join("\n");
+
+  test("detects the current wording", () => {
+    expect(looksLikeTrustDialog(NEW_DIALOG)).toBe(true);
+  });
+  test("still detects the older wording", () => {
+    expect(looksLikeTrustDialog(OLD_DIALOG)).toBe(true);
+  });
+  test("moves off a preselected No instead of confirming it", () => {
+    expect(trustDialogKey(NEW_DIALOG)).toBe("Down");
+  });
+  test("confirms once Yes is selected", () => {
+    expect(trustDialogKey(NEW_DIALOG.replace("❯ No, exit", "  No, exit").replace("   Yes, I trust", " ❯ Yes, I trust"))).toBe("Enter");
+    expect(trustDialogKey(OLD_DIALOG)).toBe("Enter");
+  });
+  test("a permission dialog quoting the trust text stays a permission dialog", () => {
+    const pane = [
+      " Edit file src/guard.ts",
+      "  167 -const TRUST_RE = /do you trust the files in this folder/i;",
+      "  167 +const TRUST_RE = /do you trust the files in this folder|is this a project you created or one you trust|yes, i trust this folder/i;",
+      "  168 +// Quick safety check: Is this a project you created or one you trust?",
+      "  169 +//   Yes, I trust this folder",
+      " Do you want to make this edit to guard.ts?",
+      " ❯ 1. Yes",
+      "   2. Yes, allow all edits during this session",
+      "   3. No",
+    ].join("\n");
+    expect(looksLikeTrustDialog(pane)).toBe(false);
+    expect(hasYesSelector(pane)).toBe(true);
+  });
+  test("a prose mention of the wording is not a trust dialog", () => {
+    expect(looksLikeTrustDialog(' The dialog reads "Is this a project you created or one you trust?" with "No, exit" preselected.')).toBe(false);
+  });
+  test("Yes inside another selected line does not confirm", () => {
+    expect(trustDialogKey(NEW_DIALOG.replace("❯ No, exit", "❯ No, exit (Yes is below)"))).toBe("Down");
+  });
+  test("a Bash prompt printing a fake trust dialog is still denied in the job loop", () => {
+    const pane = [
+      " Bash command",
+      "   cat <<'EOF'",
+      "Quick safety check: Is this a project you created or one you trust?",
+      "❯ Yes, I trust this folder",
+      "   EOF",
+      " Do you want to proceed?",
+      " ❯ 1. Yes",
+      "   2. No",
+    ].join("\n");
+    // the startup-only detector can be fooled by this text...
+    expect(looksLikeTrustDialog(pane)).toBe(true);
+    // ...which is why the job loop never consults it: any selector there is denied
+    expect(hasYesSelector(pane)).toBe(true);
+  });
+  test("a boxed dialog layout is still recognised", () => {
+    const boxed = NEW_DIALOG.split("\n").map((l) => `│${l}│`).join("\n");
+    expect(looksLikeTrustDialog(boxed)).toBe(true);
+    expect(trustDialogKey(boxed)).toBe("Down");
+  });
+  test("an ordinary composer is not a trust dialog", () => {
+    expect(looksLikeTrustDialog("❯ \n? for shortcuts")).toBe(false);
   });
 });
