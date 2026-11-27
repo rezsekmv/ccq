@@ -163,12 +163,12 @@ const ANCHOR_CHARS = 40;
 /** The part of `pane` that appeared AFTER the prompt this attempt submitted. A resumed session replays
  *  the earlier conversation (including old limit messages) into the scrollback, so limit detection
  *  must never read text from before our own input.
- *  1. Anchor: the LAST line that is the input marker `❯` followed by the start of `submitted`;
- *     everything below it is returned.
- *  2. No anchor (e.g. a long paste collapsed into "[Pasted text]"): the lines that are new compared
- *     with `baseline` (a capture taken before the submit), counted as a multiset so an identical
- *     stale line does not hide a fresh one.
- *  3. Neither works: "" — never the whole scrollback. */
+ *  0. With `baseline` (a capture taken before the submit), only the lines new compared with it are
+ *     considered, counted as a multiset so an identical stale line does not hide a fresh one.
+ *  1. Anchor: among those lines, the LAST one that is the input marker `❯` followed by the start of
+ *     `submitted`; everything below it is returned.
+ *  2. No anchor (e.g. a long paste collapsed into "[Pasted text]"): the new lines from step 0.
+ *  3. No anchor and no baseline: "" — never the whole scrollback. */
 export function textAfterSubmit(pane: string, submitted: string, baseline?: string): string {
   // With a baseline, only lines new versus it are candidates, for the anchor too: from the second
   // resume on, the replay already holds an old "❯ continue" followed by an old limit line, and that
