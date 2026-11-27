@@ -237,6 +237,13 @@ describe("textAfterSubmit", () => {
     const baseline = `${OLD}\nidle\n`;
     expect(parseLimitError(textAfterSubmit(`idle\n❯ continue\nworking\n${OLD}\n`, "continue", baseline))).not.toBeNull();
   });
+  test("unique resume marker: an old echo scrolled out of the capture cannot consume ours", () => {
+    const now = "[ccq resume 2026-11-27T10:00:00.000Z] continue";
+    const old = "[ccq resume 2026-11-26T22:00:00.000Z] continue";
+    const baseline = `❯ ${old}\n${OLD}\n`;
+    // both old lines scrolled out; our echo + a fresh identical weekly-style line remain
+    expect(parseLimitError(textAfterSubmit(`❯ ${now}\nworking\n${OLD}\n`, now, baseline))).not.toBeNull();
+  });
   test("missing anchor: only text new versus the baseline counts", () => {
     const baseline = `${OLD}\nidle\n`;
     expect(parseLimitError(textAfterSubmit(`${OLD}\nidle\nworking\n`, "continue", baseline))).toBeNull();

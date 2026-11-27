@@ -155,7 +155,9 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
   if (await tmux.hasSession(name)) await tmux.killSession(name);
   await tmux.newSession(name, job.worktree!, parts.filter(Boolean).join(" "));
 
-  const submitted = resuming ? (job.resumeMessage ?? "continue") : job.prompt;
+  // A resume message STARTS with a per-attempt marker (inside the anchor prefix) so its echo is unique: an earlier attempt's
+  // identical "❯ continue" in the replay can then never be taken for (or consume) our own anchor.
+  const submitted = resuming ? `[ccq resume ${new Date().toISOString()}] ${job.resumeMessage ?? "continue"}` : job.prompt;
   let baseline = "";
   try {
     await waitForReady(tmux, name, job, cfg.readyTimeoutSec, resuming);
