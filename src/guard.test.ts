@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hasYesSelector, isInWindow, looksLikeTrustDialog, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, trustDialogKey, weeklyGuard } from "./guard.ts";
+import { hasYesSelector, isInWindow, looksLikeTrustDialog, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, textAfterSubmit, trustDialogKey, weeklyGuard } from "./guard.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 import type { UsageSnapshot, WindowCfg } from "./types.ts";
 
@@ -197,5 +197,56 @@ describe("trust dialog", () => {
   });
   test("an ordinary composer is not a trust dialog", () => {
     expect(looksLikeTrustDialog("❯ \n? for shortcuts")).toBe(false);
+  });
+});
+
+describe("textAfterSubmit", () => {
+  const OLD = "You've hit your 5-hour limit · resets 7:30am";
+  const NEW = "You've hit your 5-hour limit · resets 11:00pm";
+
+  test("old limit line above the resume anchor is ignored", () => {
+    const pane = `${OLD}\n\n❯ continue\n\n● Reading the files now\n`;
+    expect(parseLimitError(textAfterSubmit(pane, "continue"))).toBeNull();
+  });
+  test("new limit line below the resume anchor is returned", () => {
+    const pane = `${OLD}\n\n❯ continue\n\n● working\n${NEW}\n`;
+    expect(parseLimitError(textAfterSubmit(pane, "continue"))).not.toBeNull();
+  });
+  test("the last anchor wins when the text was submitted before", () => {
+    const pane = `❯ continue\n${OLD}\n❯ continue\nworking\n`;
+    expect(parseLimitError(textAfterSubmit(pane, "continue"))).toBeNull();
+  });
+  test("fresh job: limit after the prompt is returned", () => {
+    const pane = `│ ❯ Refactor the parser please\n${NEW}\n`;
+    expect(parseLimitError(textAfterSubmit(pane, "Refactor the parser please\nmore detail"))).not.toBeNull();
+  });
+  test("missing anchor and no baseline: old text is not counted", () => {
+    expect(textAfterSubmit(`${OLD}\nsomething\n`, "continue")).toBe("");
+  });
+  test("second resume: an old echo in the replay is not the anchor (baseline given)", () => {
+    const baseline = `❯ continue\n${OLD}\n`;
+    // our own echo has not rendered yet: only the replayed old echo + old limit are on screen
+    expect(parseLimitError(textAfterSubmit(`❯ continue\n${OLD}\n`, "continue", baseline))).toBeNull();
+    // our echo rendered, then a fresh limit: caught
+    expect(parseLimitError(textAfterSubmit(`❯ continue\n${OLD}\n❯ continue\nworking\n${NEW}\n`, "continue", baseline))).not.toBeNull();
+    // our echo rendered, work goes on, no new limit
+    expect(parseLimitError(textAfterSubmit(`❯ continue\n${OLD}\n❯ continue\nworking\n`, "continue", baseline))).toBeNull();
+  });
+  test("a fresh limit identical to a baseline line is caught once our echo rendered", () => {
+    // the old copy scrolled out of the capture but is still in the baseline
+    const baseline = `${OLD}\nidle\n`;
+    expect(parseLimitError(textAfterSubmit(`idle\n❯ continue\nworking\n${OLD}\n`, "continue", baseline))).not.toBeNull();
+  });
+  test("unique resume marker: an old echo scrolled out of the capture cannot consume ours", () => {
+    const now = "[ccq resume 2026-11-27T10:00:00.000Z] continue";
+    const old = "[ccq resume 2026-11-26T22:00:00.000Z] continue";
+    const baseline = `❯ ${old}\n${OLD}\n`;
+    // both old lines scrolled out; our echo + a fresh identical weekly-style line remain
+    expect(parseLimitError(textAfterSubmit(`❯ ${now}\nworking\n${OLD}\n`, now, baseline))).not.toBeNull();
+  });
+  test("missing anchor: only text new versus the baseline counts", () => {
+    const baseline = `${OLD}\nidle\n`;
+    expect(parseLimitError(textAfterSubmit(`${OLD}\nidle\nworking\n`, "continue", baseline))).toBeNull();
+    expect(parseLimitError(textAfterSubmit(`${OLD}\nidle\nworking\n${OLD}\n`, "continue", baseline))).not.toBeNull();
   });
 });

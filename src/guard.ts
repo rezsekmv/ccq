@@ -157,6 +157,46 @@ export function parseLimitError(text: string, now: number = Date.now()): LimitHi
   return null;
 }
 
+/** Number of leading characters of the submitted text used to find its echo in the composer history. */
+const ANCHOR_CHARS = 40;
+
+/** The part of `pane` that appeared AFTER the prompt this attempt submitted. A resumed session replays
+ *  the earlier conversation (including old limit messages) into the scrollback, so limit detection
+ *  must never read text from before our own input.
+ *  0. With `baseline` (a capture taken before the submit), only the lines new compared with it are
+ *     considered, counted as a multiset so an identical stale line does not hide a fresh one.
+ *  1. Anchor: among those lines, the LAST one that is the input marker `❯` followed by the start of
+ *     `submitted`; everything below it is returned.
+ *  2. No anchor (e.g. a long paste collapsed into "[Pasted text]"): the new lines from step 0.
+ *  3. No anchor and no baseline: "" — never the whole scrollback. */
+export function textAfterSubmit(pane: string, submitted: string, baseline?: string): string {
+  // With a baseline, only lines new versus it are candidates, for the anchor too: from the second
+  // resume on, the replay already holds an old "❯ continue" followed by an old limit line, and that
+  // old echo must never serve as our anchor.
+  const lines = pane.split("\n");
+  // indices of the candidate lines (all of them, or only those new versus the baseline)
+  let idx = lines.map((_, i) => i);
+  if (baseline !== undefined) {
+    const seen = new Map<string, number>();
+    for (const l of baseline.split("\n")) seen.set(l, (seen.get(l) ?? 0) + 1);
+    idx = idx.filter((i) => {
+      const n = seen.get(lines[i]!) ?? 0;
+      if (n > 0) { seen.set(lines[i]!, n - 1); return false; }
+      return true;
+    });
+  }
+  const want = submitted.trim().split("\n")[0]!.trim().slice(0, ANCHOR_CHARS);
+  if (want) {
+    for (let k = idx.length - 1; k >= 0; k--) {
+      const m = /^[\s│]*❯\s*(.*)$/.exec(lines[idx[k]!]!);
+      // everything below OUR echo counts, unfiltered: a fresh line may repeat an old one verbatim
+      // (e.g. the weekly limit's "resets Mon 9am") after the old copy scrolled out of the capture
+      if (m && m[1]!.trim().startsWith(want)) return lines.slice(idx[k]! + 1).join("\n");
+    }
+  }
+  return baseline === undefined ? "" : idx.map((i) => lines[i]!).join("\n");
+}
+
 // Permission dialog + trust dialog detection. MUST run on the VISIBLE pane only
 // (not scrollback) — a dismissed dialog's text lingers in history and would re-trigger.
 // The "❯ 1. Yes" selector line only renders while a dialog is actually open.

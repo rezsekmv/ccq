@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { hasYesSelector, looksLikeTrustDialog, MAX_TRUST_KEYS, parseLimitError, trustDialogKey, type LimitHit } from "./guard.ts";
+import { hasYesSelector, looksLikeTrustDialog, MAX_TRUST_KEYS, parseLimitError, textAfterSubmit, trustDialogKey, type LimitHit } from "./guard.ts";
 import { appendLog, clearSignal, ensureHookSettings, persistJobFields, readSignal, worktreePath } from "./store.ts";
 import { makeTmux, sessionName, type Tmux } from "./tmux.ts";
 import type { Config, Job } from "./types.ts";
@@ -110,14 +110,15 @@ function tokensNonzero(pane: string): boolean {
   return !!m && parseFloat(m[1]!) > 0;
 }
 
-async function submitPrompt(tmux: Tmux, name: string, job: Job, text: string): Promise<void> {
+async function submitPrompt(tmux: Tmux, name: string, job: Job, text: string, baseline: string): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     if (await tmux.paneDead(name)) throw new Error("claude exited before the prompt was sent");
     await tmux.paste(name, text);
     await sleep(5000);
     const pane = await tmux.captureVisible(name);
-    // accepted = working / tokens consumed / finished / limit / dialog — main loop handles each
-    if (ACTIVITY_RE.test(pane) || tokensNonzero(pane) || readSignal(job.id) || parseLimitError(pane) || hasYesSelector(pane)) return;
+    // accepted = working / tokens consumed / finished / limit / dialog — main loop handles each.
+    // A limit line counts only if it appeared after our submit: a resume replays old ones.
+    if (ACTIVITY_RE.test(pane) || tokensNonzero(pane) || readSignal(job.id) || parseLimitError(textAfterSubmit(pane, text, baseline)) || hasYesSelector(pane)) return;
     appendLog(job.id, `paste attempt ${attempt} not accepted, retrying\n${pane.slice(-1500)}`);
     await tmux.sendKeys(name, ["Escape"]); // clear any stuck panel/partial input before re-paste
     await sleep(3000);
@@ -154,9 +155,15 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
   if (await tmux.hasSession(name)) await tmux.killSession(name);
   await tmux.newSession(name, job.worktree!, parts.filter(Boolean).join(" "));
 
+  // A resume message STARTS with a per-attempt marker (inside the anchor prefix) so its echo is unique: an earlier attempt's
+  // identical "❯ continue" in the replay can then never be taken for (or consume) our own anchor.
+  const submitted = resuming ? `[ccq resume ${new Date().toISOString()}] ${job.resumeMessage ?? "continue"}` : job.prompt;
+  let baseline = "";
   try {
     await waitForReady(tmux, name, job, cfg.readyTimeoutSec, resuming);
-    await submitPrompt(tmux, name, job, resuming ? (job.resumeMessage ?? "continue") : job.prompt);
+    // Baseline BEFORE our input: on resume it holds the replayed history (old limit lines included).
+    baseline = await tmux.capturePane(name).catch(() => "");
+    await submitPrompt(tmux, name, job, submitted, baseline);
     job.promptSent = true;
     await persistJobFields(job.id, { promptSent: true });
   } catch (e: any) {
@@ -181,7 +188,7 @@ export async function runJob(job: Job, cfg: Config): Promise<RunOutcome> {
     }
     lastPane = pane || lastPane;
 
-    const hit = parseLimitError(pane);
+    const hit = parseLimitError(textAfterSubmit(pane, submitted, baseline));
     if (hit) {
       appendLog(job.id, pane);
       await tmux.killSession(name);

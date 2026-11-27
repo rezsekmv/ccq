@@ -6,6 +6,12 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- A resumed job is no longer marked as limit-hit by an old "hit your 5-hour
+  limit" line that `claude --resume` replays into the scrollback. Only text
+  after the prompt or `continue` submitted by this attempt is checked for
+  limit messages (#4).
+
 ## [0.1.6] - 2026-10-19
 
 ### Added
