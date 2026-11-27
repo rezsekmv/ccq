@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hasYesSelector, isInWindow, looksLikeTrustDialog, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, trustDialogKey, weeklyGuard } from "./guard.ts";
+import { hasYesSelector, isInWindow, looksLikeTrustDialog, nextWindowEnd, nextWindowOpen, nightAnchor, parseLimitError, textAfterSubmit, trustDialogKey, weeklyGuard } from "./guard.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 import type { UsageSnapshot, WindowCfg } from "./types.ts";
 
@@ -197,5 +197,35 @@ describe("trust dialog", () => {
   });
   test("an ordinary composer is not a trust dialog", () => {
     expect(looksLikeTrustDialog("❯ \n? for shortcuts")).toBe(false);
+  });
+});
+
+describe("textAfterSubmit", () => {
+  const OLD = "You've hit your 5-hour limit · resets 7:30am";
+  const NEW = "You've hit your 5-hour limit · resets 11:00pm";
+
+  test("old limit line above the resume anchor is ignored", () => {
+    const pane = `${OLD}\n\n❯ continue\n\n● Reading the files now\n`;
+    expect(parseLimitError(textAfterSubmit(pane, "continue"))).toBeNull();
+  });
+  test("new limit line below the resume anchor is returned", () => {
+    const pane = `${OLD}\n\n❯ continue\n\n● working\n${NEW}\n`;
+    expect(parseLimitError(textAfterSubmit(pane, "continue"))).not.toBeNull();
+  });
+  test("the last anchor wins when the text was submitted before", () => {
+    const pane = `❯ continue\n${OLD}\n❯ continue\nworking\n`;
+    expect(parseLimitError(textAfterSubmit(pane, "continue"))).toBeNull();
+  });
+  test("fresh job: limit after the prompt is returned", () => {
+    const pane = `│ ❯ Refactor the parser please\n${NEW}\n`;
+    expect(parseLimitError(textAfterSubmit(pane, "Refactor the parser please\nmore detail"))).not.toBeNull();
+  });
+  test("missing anchor and no baseline: old text is not counted", () => {
+    expect(textAfterSubmit(`${OLD}\nsomething\n`, "continue")).toBe("");
+  });
+  test("missing anchor: only text new versus the baseline counts", () => {
+    const baseline = `${OLD}\nidle\n`;
+    expect(parseLimitError(textAfterSubmit(`${OLD}\nidle\nworking\n`, "continue", baseline))).toBeNull();
+    expect(parseLimitError(textAfterSubmit(`${OLD}\nidle\nworking\n${OLD}\n`, "continue", baseline))).not.toBeNull();
   });
 });

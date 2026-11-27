@@ -157,6 +157,39 @@ export function parseLimitError(text: string, now: number = Date.now()): LimitHi
   return null;
 }
 
+/** Number of leading characters of the submitted text used to find its echo in the composer history. */
+const ANCHOR_CHARS = 40;
+
+/** The part of `pane` that appeared AFTER the prompt this attempt submitted. A resumed session replays
+ *  the earlier conversation (including old limit messages) into the scrollback, so limit detection
+ *  must never read text from before our own input.
+ *  1. Anchor: the LAST line that is the input marker `❯` followed by the start of `submitted`;
+ *     everything below it is returned.
+ *  2. No anchor (e.g. a long paste collapsed into "[Pasted text]"): the lines that are new compared
+ *     with `baseline` (a capture taken before the submit), counted as a multiset so an identical
+ *     stale line does not hide a fresh one.
+ *  3. Neither works: "" — never the whole scrollback. */
+export function textAfterSubmit(pane: string, submitted: string, baseline?: string): string {
+  const lines = pane.split("\n");
+  const want = submitted.trim().split("\n")[0]!.trim().slice(0, ANCHOR_CHARS);
+  if (want) {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const m = /^[\s│]*❯\s*(.*)$/.exec(lines[i]!);
+      if (m && m[1]!.trim().startsWith(want)) return lines.slice(i + 1).join("\n");
+    }
+  }
+  if (baseline === undefined) return "";
+  const seen = new Map<string, number>();
+  for (const l of baseline.split("\n")) seen.set(l, (seen.get(l) ?? 0) + 1);
+  const fresh: string[] = [];
+  for (const l of lines) {
+    const n = seen.get(l) ?? 0;
+    if (n > 0) seen.set(l, n - 1);
+    else fresh.push(l);
+  }
+  return fresh.join("\n");
+}
+
 // Permission dialog + trust dialog detection. MUST run on the VISIBLE pane only
 // (not scrollback) — a dismissed dialog's text lingers in history and would re-trigger.
 // The "❯ 1. Yes" selector line only renders while a dialog is actually open.
