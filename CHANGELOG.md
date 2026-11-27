@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-27
+
 ### Fixed
 - A resumed job is no longer marked as limit-hit by an old "hit your 5-hour
   limit" line that `claude --resume` replays into the scrollback. Only text
@@ -117,6 +119,8 @@ First public release.
   `--permission-mode`, `--timeout`), `list`, `status`, `mv`, `rm`, `logs`,
   `daemon`, `install-statusline`.
 
+[0.1.7]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.7
+[0.1.6]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.6
 [0.1.5]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.5
 [0.1.4]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.4
 [0.1.3]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.3
