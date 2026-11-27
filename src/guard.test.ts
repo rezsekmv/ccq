@@ -223,6 +223,15 @@ describe("textAfterSubmit", () => {
   test("missing anchor and no baseline: old text is not counted", () => {
     expect(textAfterSubmit(`${OLD}\nsomething\n`, "continue")).toBe("");
   });
+  test("second resume: an old echo in the replay is not the anchor (baseline given)", () => {
+    const baseline = `❯ continue\n${OLD}\n`;
+    // our own echo has not rendered yet: only the replayed old echo + old limit are on screen
+    expect(parseLimitError(textAfterSubmit(`❯ continue\n${OLD}\n`, "continue", baseline))).toBeNull();
+    // our echo rendered, then a fresh limit: caught
+    expect(parseLimitError(textAfterSubmit(`❯ continue\n${OLD}\n❯ continue\nworking\n${NEW}\n`, "continue", baseline))).not.toBeNull();
+    // our echo rendered, work goes on, no new limit
+    expect(parseLimitError(textAfterSubmit(`❯ continue\n${OLD}\n❯ continue\nworking\n`, "continue", baseline))).toBeNull();
+  });
   test("missing anchor: only text new versus the baseline counts", () => {
     const baseline = `${OLD}\nidle\n`;
     expect(parseLimitError(textAfterSubmit(`${OLD}\nidle\nworking\n`, "continue", baseline))).toBeNull();

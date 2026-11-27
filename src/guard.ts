@@ -170,7 +170,21 @@ const ANCHOR_CHARS = 40;
  *     stale line does not hide a fresh one.
  *  3. Neither works: "" — never the whole scrollback. */
 export function textAfterSubmit(pane: string, submitted: string, baseline?: string): string {
-  const lines = pane.split("\n");
+  // With a baseline, only lines new versus it are candidates, for the anchor too: from the second
+  // resume on, the replay already holds an old "❯ continue" followed by an old limit line, and that
+  // old echo must never serve as our anchor.
+  let lines = pane.split("\n");
+  if (baseline !== undefined) {
+    const seen = new Map<string, number>();
+    for (const l of baseline.split("\n")) seen.set(l, (seen.get(l) ?? 0) + 1);
+    const fresh: string[] = [];
+    for (const l of lines) {
+      const n = seen.get(l) ?? 0;
+      if (n > 0) seen.set(l, n - 1);
+      else fresh.push(l);
+    }
+    lines = fresh;
+  }
   const want = submitted.trim().split("\n")[0]!.trim().slice(0, ANCHOR_CHARS);
   if (want) {
     for (let i = lines.length - 1; i >= 0; i--) {
@@ -178,16 +192,7 @@ export function textAfterSubmit(pane: string, submitted: string, baseline?: stri
       if (m && m[1]!.trim().startsWith(want)) return lines.slice(i + 1).join("\n");
     }
   }
-  if (baseline === undefined) return "";
-  const seen = new Map<string, number>();
-  for (const l of baseline.split("\n")) seen.set(l, (seen.get(l) ?? 0) + 1);
-  const fresh: string[] = [];
-  for (const l of lines) {
-    const n = seen.get(l) ?? 0;
-    if (n > 0) seen.set(l, n - 1);
-    else fresh.push(l);
-  }
-  return fresh.join("\n");
+  return baseline === undefined ? "" : lines.join("\n");
 }
 
 // Permission dialog + trust dialog detection. MUST run on the VISIBLE pane only
