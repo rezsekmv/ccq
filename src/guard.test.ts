@@ -232,6 +232,11 @@ describe("textAfterSubmit", () => {
     // our echo rendered, work goes on, no new limit
     expect(parseLimitError(textAfterSubmit(`❯ continue\n${OLD}\n❯ continue\nworking\n`, "continue", baseline))).toBeNull();
   });
+  test("a fresh limit identical to a baseline line is caught once our echo rendered", () => {
+    // the old copy scrolled out of the capture but is still in the baseline
+    const baseline = `${OLD}\nidle\n`;
+    expect(parseLimitError(textAfterSubmit(`idle\n❯ continue\nworking\n${OLD}\n`, "continue", baseline))).not.toBeNull();
+  });
   test("missing anchor: only text new versus the baseline counts", () => {
     const baseline = `${OLD}\nidle\n`;
     expect(parseLimitError(textAfterSubmit(`${OLD}\nidle\nworking\n`, "continue", baseline))).toBeNull();

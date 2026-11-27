@@ -173,26 +173,28 @@ export function textAfterSubmit(pane: string, submitted: string, baseline?: stri
   // With a baseline, only lines new versus it are candidates, for the anchor too: from the second
   // resume on, the replay already holds an old "❯ continue" followed by an old limit line, and that
   // old echo must never serve as our anchor.
-  let lines = pane.split("\n");
+  const lines = pane.split("\n");
+  // indices of the candidate lines (all of them, or only those new versus the baseline)
+  let idx = lines.map((_, i) => i);
   if (baseline !== undefined) {
     const seen = new Map<string, number>();
     for (const l of baseline.split("\n")) seen.set(l, (seen.get(l) ?? 0) + 1);
-    const fresh: string[] = [];
-    for (const l of lines) {
-      const n = seen.get(l) ?? 0;
-      if (n > 0) seen.set(l, n - 1);
-      else fresh.push(l);
-    }
-    lines = fresh;
+    idx = idx.filter((i) => {
+      const n = seen.get(lines[i]!) ?? 0;
+      if (n > 0) { seen.set(lines[i]!, n - 1); return false; }
+      return true;
+    });
   }
   const want = submitted.trim().split("\n")[0]!.trim().slice(0, ANCHOR_CHARS);
   if (want) {
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const m = /^[\s│]*❯\s*(.*)$/.exec(lines[i]!);
-      if (m && m[1]!.trim().startsWith(want)) return lines.slice(i + 1).join("\n");
+    for (let k = idx.length - 1; k >= 0; k--) {
+      const m = /^[\s│]*❯\s*(.*)$/.exec(lines[idx[k]!]!);
+      // everything below OUR echo counts, unfiltered: a fresh line may repeat an old one verbatim
+      // (e.g. the weekly limit's "resets Mon 9am") after the old copy scrolled out of the capture
+      if (m && m[1]!.trim().startsWith(want)) return lines.slice(idx[k]! + 1).join("\n");
     }
   }
-  return baseline === undefined ? "" : lines.join("\n");
+  return baseline === undefined ? "" : idx.map((i) => lines[i]!).join("\n");
 }
 
 // Permission dialog + trust dialog detection. MUST run on the VISIBLE pane only
