@@ -36,7 +36,7 @@ ccq install-statusline --config-dir ~/agents/a/.claude-config --config-dir ~/age
 ccq install-statusline --uninstall --config-dir ~/agents/a/.claude-config   # restores only that dir
 ```
 
-The original `statusLine` is backed up **per dir** (`statuslineBackups` in `~/.ccq/config.json`, keyed by the resolved path), so `--uninstall` restores exactly what was there in each one, or removes the statusline if there was none. All dirs feed the same `~/.ccq/usage.json`. Re-running `install-statusline` on a dir that already has the tee refreshes it if needed (e.g. after bun or ccq moved, or for a tee installed by an older version). `--config-dir=<dir>` works too; a missing value or any unknown argument is an error (never a silent fallback to the default dir). A symlinked `settings.json` is written through to its target, keeping its permissions.
+The original `statusLine` is backed up **per dir** (`statuslineBackups` in `~/.ccq/config.json`, keyed by the resolved path), so `--uninstall` restores exactly what was there in each one, or removes the statusline if there was none. All dirs feed the same `~/.ccq/usage.json`. Re-running `install-statusline` on a dir that already has the tee refreshes it if needed (a tee installed by an older version). The tee calls `ccq` from PATH (`ccq statusline-tee -- <original>`), so it survives bun and ccq upgrades, but `ccq` must be on the PATH Claude Code starts with (a GUI-launched Claude Code may not have your shell's PATH). `--config-dir=<dir>` works too; a missing value or any unknown argument is an error (never a silent fallback to the default dir). A symlinked `settings.json` is written through to its target, keeping its permissions.
 
 ## Usage
 

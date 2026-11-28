@@ -209,8 +209,7 @@ function cmdInstallStatusline(): void {
   const targets = resolveConfigDirs(configDirs, process.env);
   const cfg = loadConfig();
   migrateLegacyBackup(cfg);
-  const self = process.argv[1];
-  const tee = (original: string) => buildTeeCommand(process.execPath, self!, original);
+  const tee = buildTeeCommand;
 
   let failed = 0;
   for (const dir of targets) {

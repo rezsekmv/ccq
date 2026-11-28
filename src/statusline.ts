@@ -19,16 +19,18 @@ export function shUnquote(s: string): string | null {
   return m ? m[1]!.replace(/'\\''/g, "'") : null;
 }
 
-/** The statusline command that tees usage data, then runs the original. The original is passed as
- *  ONE quoted word: unquoted, Claude's shell would split it at `|`, `;`, `&&` (only the first part
- *  would be wrapped) and strip its inner quoting. */
-export function buildTeeCommand(execPath: string, cli: string, original: string): string {
-  return `"${execPath}" "${cli}" statusline-tee${original ? ` -- ${shQuote(original)}` : ""}`;
+/** The statusline command that tees usage data, then runs the original. `ccq` is resolved from PATH:
+ *  absolute bun/ccq paths are versioned (e.g. under mise installs) and vanish on upgrade, silently
+ *  killing the statusline. The original is passed as ONE quoted word: unquoted, Claude's shell would
+ *  split it at `|`, `;`, `&&` (only the first part would be wrapped) and strip its inner quoting. */
+export function buildTeeCommand(original: string): string {
+  return `ccq statusline-tee${original ? ` -- ${shQuote(original)}` : ""}`;
 }
 
-/** The exact command installTee writes: `"<bun>" "<ccq cli>" statusline-tee[ -- <original>]`.
- *  Matching the whole shape (not a substring) keeps unrelated commands from looking installed. */
-const TEE_COMMAND = /^"[^"]*" "[^"]*" statusline-tee(?: -- (.*))?$/s;
+/** A command installTee writes: `ccq statusline-tee[ -- <original>]`, or the pre-0.1.8 absolute-path
+ *  form `"<bun>" "<ccq cli>" statusline-tee[ -- <original>]` (still recognised so it can be refreshed
+ *  or uninstalled). Matching the whole shape (not a substring) keeps unrelated commands from looking installed. */
+const TEE_COMMAND = /^(?:ccq|"[^"]*" "[^"]*") statusline-tee(?: -- (.*))?$/s;
 
 /** Parse `install-statusline` args strictly: anything unrecognised is an error, so a typo or a
  *  dangling `--config-dir` can never silently fall back to editing the default config dir. */
@@ -107,8 +109,8 @@ export function wrappedCommand(settings: Record<string, any>): string {
   return raw ? (shUnquote(raw) ?? raw) : "";
 }
 
-/** Rewrite an installed tee whose command is not what we'd write now (moved bun/ccq path, or a
- *  pre-0.1.6 unquoted original). Returns null when it is already current. */
+/** Rewrite an installed tee whose command is not what we'd write now (an older absolute bun/ccq path,
+ *  or a pre-0.1.6 unquoted original). Returns null when it is already current. */
 export function refreshTee(settings: Record<string, any>, original: string, teeCommand: (original: string) => string): Record<string, any> | null {
   const want = teeCommand(original);
   if (settings.statusLine?.command === want) return null;
