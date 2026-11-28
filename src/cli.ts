@@ -7,7 +7,7 @@ import { daemon } from "./daemon.ts";
 import { isInWindow, nextWindowOpen, weeklyGuard } from "./guard.ts";
 import { PATHS, atomicWrite, ensureDirs, isCleanable, loadConfig, loadQueue, loadUsage, logPath, mutateQueue, saveConfig, signalPath } from "./store.ts";
 import { sessionName, sessionTarget } from "./tmux.ts";
-import { buildTeeCommand, canonicalDir, installTee, isTeeInstalled, parseInstallArgs, refreshTee, resolveConfigDirs, resolveLink, uninstallTee, wrappedCommand } from "./statusline.ts";
+import { assertCcqOnPath, buildTeeCommand, canonicalDir, installTee, isTeeInstalled, parseInstallArgs, refreshTee, resolveConfigDirs, resolveLink, uninstallTee, wrappedCommand } from "./statusline.ts";
 import { newJob, type Config, type Job } from "./types.ts";
 
 const args = process.argv.slice(2);
@@ -207,10 +207,10 @@ function cmdLogs(): void {
 function cmdInstallStatusline(): void {
   const { uninstall, configDirs } = parseInstallArgs(args);
   const targets = resolveConfigDirs(configDirs, process.env);
+  if (!uninstall) assertCcqOnPath((cmd) => Bun.which(cmd));
   const cfg = loadConfig();
   migrateLegacyBackup(cfg);
-  const self = process.argv[1];
-  const tee = (original: string) => buildTeeCommand(process.execPath, self!, original);
+  const tee = buildTeeCommand;
 
   let failed = 0;
   for (const dir of targets) {

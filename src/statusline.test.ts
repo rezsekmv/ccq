@@ -2,11 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildTeeCommand, canonicalDir, installTee, isTeeInstalled, parseInstallArgs, refreshTee, resolveConfigDirs, resolveLink, shQuote, shUnquote, uninstallTee, wrappedCommand } from "./statusline.ts";
+import { assertCcqOnPath, buildTeeCommand, canonicalDir, installTee, isTeeInstalled, parseInstallArgs, refreshTee, resolveConfigDirs, resolveLink, shQuote, shUnquote, uninstallTee, wrappedCommand } from "./statusline.ts";
 
 const home = canonicalDir(mkdtempSync(join(tmpdir(), "ccq-home-")));
-const tee = (orig: string) => buildTeeCommand("bun", "cli.ts", orig);
+const tee = (orig: string) => buildTeeCommand(orig);
 const legacyTee = (orig: string) => `"bun" "cli.ts" statusline-tee${orig ? ` -- ${orig}` : ""}`; // pre-0.1.6 format
+const pathTee = (orig: string) => `"/mise/installs/bun/1.4.3/bin/bun" "/mise/@rezsekmv+ccq@0.1.6/src/cli.ts" statusline-tee${orig ? ` -- ${shQuote(orig)}` : ""}`; // 0.1.6-0.1.7: absolute, versioned paths
 
 describe("parseInstallArgs", () => {
   test("accepts repeated --config-dir in both forms, plus --uninstall anywhere", () => {
@@ -56,12 +57,37 @@ describe("resolveConfigDirs", () => {
   });
 });
 
+describe("buildTeeCommand", () => {
+  test("calls ccq from PATH, with no runtime or versioned install path", () => {
+    const c = buildTeeCommand("~/sl.sh");
+    expect(c).toBe(`ccq statusline-tee -- '~/sl.sh'`);
+    expect(c).not.toContain(process.execPath);
+    expect(c).not.toMatch(/\d+\.\d+\.\d+/);
+    expect(buildTeeCommand("")).toBe("ccq statusline-tee");
+  });
+
+  test("older absolute-path tees still count as installed and refresh to the PATH form", () => {
+    const old = installTee({ statusLine: { type: "command", command: "a | b" } }, pathTee)!.settings;
+    expect(isTeeInstalled(old)).toBe(true);
+    expect(wrappedCommand(old)).toBe("a | b");
+    expect(refreshTee(old, wrappedCommand(old), tee)!.statusLine.command).toBe(`ccq statusline-tee -- 'a | b'`);
+    expect(uninstallTee(old, undefined).statusLine).toEqual({ type: "command", command: "a | b" });
+  });
+});
+
+describe("assertCcqOnPath", () => {
+  test("refuses to install a tee that could not find ccq", () => {
+    expect(() => assertCcqOnPath(() => null)).toThrow(/not on PATH/);
+    expect(() => assertCcqOnPath((c) => (c === "ccq" ? "/shims/ccq" : null))).not.toThrow();
+  });
+});
+
 describe("install / uninstall", () => {
   test("wraps an existing statusline and restores it exactly, extra fields included", () => {
     const original = { type: "command", command: "~/sl.sh", padding: 2 };
     const r = installTee({ model: "x", statusLine: original }, tee)!;
     expect(r.backup).toEqual(original);
-    expect(r.settings.statusLine).toEqual({ type: "command", command: `"bun" "cli.ts" statusline-tee -- '~/sl.sh'`, padding: 2 });
+    expect(r.settings.statusLine).toEqual({ type: "command", command: `ccq statusline-tee -- '~/sl.sh'`, padding: 2 });
     expect(r.settings.model).toBe("x");
     expect(uninstallTee(r.settings, r.backup)).toEqual({ model: "x", statusLine: original });
   });
@@ -147,13 +173,11 @@ describe("quoting the wrapped command", () => {
     expect(wrappedCommand(installTee({}, tee)!.settings)).toBe("");
   });
 
-  test("refreshTee upgrades a legacy or moved tee and leaves a current one alone", () => {
+  test("refreshTee upgrades a legacy tee and leaves a current one alone", () => {
     const legacy = installTee({ statusLine: { type: "command", command: "a | b", padding: 1 } }, legacyTee)!.settings;
     const fresh = refreshTee(legacy, "a | b", tee)!;
     expect(fresh.statusLine).toEqual({ type: "command", command: tee("a | b"), padding: 1 });
     expect(refreshTee(fresh, "a | b", tee)).toBeNull();
-    const moved = refreshTee(fresh, "a | b", (o) => buildTeeCommand("/new/bun", "cli.ts", o))!;
-    expect(moved.statusLine.command).toBe(buildTeeCommand("/new/bun", "cli.ts", "a | b"));
   });
 });
 

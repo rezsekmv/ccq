@@ -6,6 +6,15 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- `ccq install-statusline` writes `ccq statusline-tee -- <original>`, calling
+  `ccq` from PATH, instead of absolute bun and ccq paths. Those paths carry
+  version numbers (e.g. under mise installs), so upgrading bun or ccq and
+  removing the old version silently broke the statusline. Re-running
+  `ccq install-statusline` upgrades an existing tee. `ccq` must be on the
+  PATH Claude Code starts with: `install-statusline` refuses to install or
+  refresh the tee when `ccq` is not on PATH (`--uninstall` still works).
+
 ## [0.1.7] - 2026-11-27
 
 ### Fixed
