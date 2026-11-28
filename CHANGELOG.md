@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-28
+
 ### Fixed
 - `ccq install-statusline` writes `ccq statusline-tee -- <original>`, calling
   `ccq` from PATH, instead of absolute bun and ccq paths. Those paths carry
@@ -128,6 +130,7 @@ First public release.
   `--permission-mode`, `--timeout`), `list`, `status`, `mv`, `rm`, `logs`,
   `daemon`, `install-statusline`.
 
+[0.1.8]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.8
 [0.1.7]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.7
 [0.1.6]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.6
 [0.1.5]: https://github.com/rezsekmv/ccq/releases/tag/v0.1.5
