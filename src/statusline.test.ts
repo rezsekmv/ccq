@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildTeeCommand, canonicalDir, installTee, isTeeInstalled, parseInstallArgs, refreshTee, resolveConfigDirs, resolveLink, shQuote, shUnquote, uninstallTee, wrappedCommand } from "./statusline.ts";
+import { assertCcqOnPath, buildTeeCommand, canonicalDir, installTee, isTeeInstalled, parseInstallArgs, refreshTee, resolveConfigDirs, resolveLink, shQuote, shUnquote, uninstallTee, wrappedCommand } from "./statusline.ts";
 
 const home = canonicalDir(mkdtempSync(join(tmpdir(), "ccq-home-")));
 const tee = (orig: string) => buildTeeCommand(orig);
@@ -72,6 +72,13 @@ describe("buildTeeCommand", () => {
     expect(wrappedCommand(old)).toBe("a | b");
     expect(refreshTee(old, wrappedCommand(old), tee)!.statusLine.command).toBe(`ccq statusline-tee -- 'a | b'`);
     expect(uninstallTee(old, undefined).statusLine).toEqual({ type: "command", command: "a | b" });
+  });
+});
+
+describe("assertCcqOnPath", () => {
+  test("refuses to install a tee that could not find ccq", () => {
+    expect(() => assertCcqOnPath(() => null)).toThrow(/not on PATH/);
+    expect(() => assertCcqOnPath((c) => (c === "ccq" ? "/shims/ccq" : null))).not.toThrow();
   });
 });
 

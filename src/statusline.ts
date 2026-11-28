@@ -27,6 +27,17 @@ export function buildTeeCommand(original: string): string {
   return `ccq statusline-tee${original ? ` -- ${shQuote(original)}` : ""}`;
 }
 
+/** The tee runs a bare `ccq`, so installing it where `ccq` is not on PATH would replace a working
+ *  statusline with "command not found" (both the usage tee and the original output gone, silently).
+ *  Refuse instead. `which` is injected for tests; the CLI passes Bun.which. */
+export function assertCcqOnPath(which: (cmd: string) => string | null): void {
+  if (which("ccq")) return;
+  throw new Error(
+    "`ccq` is not on PATH, so the statusline tee (`ccq statusline-tee`) could not run. " +
+      "Add the directory holding ccq (e.g. ~/.local/share/mise/shims) to the PATH that Claude Code starts with, then re-run.",
+  );
+}
+
 /** A command installTee writes: `ccq statusline-tee[ -- <original>]`, or the pre-0.1.8 absolute-path
  *  form `"<bun>" "<ccq cli>" statusline-tee[ -- <original>]` (still recognised so it can be refreshed
  *  or uninstalled). Matching the whole shape (not a substring) keeps unrelated commands from looking installed. */
